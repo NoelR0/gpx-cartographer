@@ -9,15 +9,15 @@ import (
 	"testing"
 )
 
-// ---------------------------------------------------------------- Testdaten bauen
+// ---------------------------------------------------------------- building test data
 
 type tEntry struct {
 	tag   uint16
 	typ   uint16
 	count uint32
-	data  []byte // Rohdaten; bei Zeigern auf andere IFDs wird ptr verwendet
-	ptr   int    // Index eines IFDs, dessen Offset eingetragen wird (-1 = keiner)
-	thumb bool   // Offset des Vorschaubilds eintragen
+	data  []byte // raw data; for pointers to other IFDs, ptr is used
+	ptr   int    // index of an IFD whose offset is written (-1 = none)
+	thumb bool   // write the thumbnail offset
 }
 
 type tIFD []tEntry
@@ -51,9 +51,9 @@ func pointer(tag uint16, ifd int) tEntry {
 	return tEntry{tag: tag, typ: 4, count: 1, ptr: ifd}
 }
 
-// buildTIFF legt die IFDs hintereinander ab. ifds[0] ist IFD0, next1 ist der
-// Index von IFD1 (oder -1). Der Offset des Vorschaubilds wird für Einträge
-// mit thumb=true eingetragen.
+// buildTIFF lays out the IFDs one after another. ifds[0] is IFD0, next1 is the
+// index of IFD1 (or -1). The thumbnail offset is written for entries with
+// thumb=true.
 func buildTIFF(bo binary.ByteOrder, ifds []tIFD, next1 int, thumb []byte) []byte {
 	sizeOf := func(ifd tIFD) int {
 		n := 2 + 12*len(ifd) + 4
@@ -112,7 +112,7 @@ func buildTIFF(bo binary.ByteOrder, ifds []tIFD, next1 int, thumb []byte) []byte
 	return append(out, thumb...)
 }
 
-// wrapJPEG erzeugt ein kleines JPEG und fügt die TIFF-Daten als APP1 ein.
+// wrapJPEG creates a small JPEG and inserts the TIFF data as APP1.
 func wrapJPEG(t *testing.T, w, h int, tiff []byte) []byte {
 	t.Helper()
 	var img bytes.Buffer
@@ -175,24 +175,24 @@ func TestReadJPEG(t *testing.T) {
 				t.Fatal(err)
 			}
 			if m.Width != 64 || m.Height != 48 {
-				t.Errorf("Grösse = %dx%d, erwartet 64x48", m.Width, m.Height)
+				t.Errorf("size = %dx%d, want 64x48", m.Width, m.Height)
 			}
 			if m.Orientation != 6 {
-				t.Errorf("Ausrichtung = %d", m.Orientation)
+				t.Errorf("orientation = %d", m.Orientation)
 			}
 			if !m.HasGPS {
-				t.Fatal("keine GPS-Daten")
+				t.Fatal("no GPS data")
 			}
 			wantLat := 47 + 22.0/60 + 12.34/3600
 			if math.Abs(m.Lat-wantLat) > 1e-9 || math.Abs(m.Lon-(-(8+32.0/60))) > 1e-9 {
-				t.Errorf("Position = %v, %v", m.Lat, m.Lon)
+				t.Errorf("position = %v, %v", m.Lat, m.Lon)
 			}
 			if m.DateTime != "2026:08:15 10:30:15" || m.Offset != "+02:00" {
-				t.Errorf("Zeit = %q %q (DateTimeOriginal muss DateTime überschreiben)", m.DateTime, m.Offset)
+				t.Errorf("time = %q %q (DateTimeOriginal must override DateTime)", m.DateTime, m.Offset)
 			}
 			thumb, err := jpeg.DecodeConfig(bytes.NewReader(m.Thumbnail))
 			if err != nil || thumb.Width != 32 || thumb.Height != 24 {
-				t.Errorf("Vorschaubild: %v %+v", err, thumb)
+				t.Errorf("thumbnail: %v %+v", err, thumb)
 			}
 		})
 	}
@@ -204,7 +204,7 @@ func TestReadJPEGWithoutExif(t *testing.T) {
 		t.Fatal(err)
 	}
 	if m.Width != 10 || m.Height != 7 || m.HasGPS || m.Orientation != 1 || m.Thumbnail != nil {
-		t.Errorf("unerwartet: %+v", m)
+		t.Errorf("unexpected: %+v", m)
 	}
 }
 
@@ -222,30 +222,30 @@ func TestNullIslandIgnored(t *testing.T) {
 		t.Fatal(err)
 	}
 	if m.HasGPS {
-		t.Error("0/0 darf nicht als Position gelten")
+		t.Error("0/0 must not count as a position")
 	}
 }
 
 func TestCorruptExifDoesNotFail(t *testing.T) {
-	// Kaputte EXIF-Daten: Foto muss trotzdem mit Grösse gelesen werden
+	// Broken EXIF data: the photo must still be read with its size
 	data := wrapJPEG(t, 12, 9, []byte("II*\x00\xff\xff\xff\x7f garbage"))
 	m, err := Read(bytes.NewReader(data))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if m.Width != 12 || m.Height != 9 {
-		t.Errorf("Grösse = %dx%d", m.Width, m.Height)
+		t.Errorf("size = %dx%d", m.Width, m.Height)
 	}
 }
 
 func TestTruncatedAndGarbage(t *testing.T) {
 	full := fullExample(t, binary.LittleEndian)
-	// Jede abgeschnittene Version darf höchstens einen Fehler liefern, nie abstürzen.
+	// Every truncated version may at most return an error, never panic.
 	for n := 0; n < len(full); n += 7 {
 		_, _ = Read(bytes.NewReader(full[:n]))
 	}
-	if _, err := Read(bytes.NewReader([]byte("definitiv kein Bild"))); err == nil {
-		t.Error("Fehler erwartet")
+	if _, err := Read(bytes.NewReader([]byte("definitely not an image"))); err == nil {
+		t.Error("expected an error")
 	}
 }
 
@@ -258,7 +258,7 @@ func TestReadPNG(t *testing.T) {
 		binary.BigEndian.PutUint32(b, uint32(len(data)))
 		copy(b[4:], typ)
 		b = append(b, data...)
-		return append(b, 0, 0, 0, 0) // CRC wird nicht geprüft
+		return append(b, 0, 0, 0, 0) // CRC is not checked
 	}
 	ihdr := make([]byte, 13)
 	binary.BigEndian.PutUint32(ihdr[0:], 300)
@@ -267,7 +267,7 @@ func TestReadPNG(t *testing.T) {
 	var png bytes.Buffer
 	png.Write(pngSignature)
 	png.Write(chunk("IHDR", ihdr))
-	png.Write(chunk("tEXt", []byte("Comment\x00hallo")))
+	png.Write(chunk("tEXt", []byte("Comment\x00hello")))
 	png.Write(chunk("eXIf", tiff))
 	png.Write(chunk("IDAT", []byte{1, 2, 3}))
 
@@ -276,6 +276,6 @@ func TestReadPNG(t *testing.T) {
 		t.Fatal(err)
 	}
 	if m.Width != 300 || m.Height != 200 || m.Orientation != 3 {
-		t.Errorf("unerwartet: %+v", m)
+		t.Errorf("unexpected: %+v", m)
 	}
 }

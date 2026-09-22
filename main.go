@@ -1,4 +1,4 @@
-// GPX Cartographer zeigt Fotos und GPX-Tracks auf einer OpenStreetMap-Karte.
+// GPX Cartographer shows photos and GPX tracks on an OpenStreetMap map.
 package main
 
 import (
@@ -13,10 +13,10 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
-	_ "time/tzdata" // Zeitzonen einbetten, damit das Image ohne tzdata auskommt
+	_ "time/tzdata" // embed time zones so the image works without tzdata
 )
 
-// version wird beim Bauen gesetzt: -ldflags "-X main.version=1.2.3"
+// version is set at build time: -ldflags "-X main.version=1.2.3"
 var version = "dev"
 
 func main() {
@@ -36,9 +36,9 @@ func main() {
 		os.Exit(healthcheck(cfg.Addr))
 	}
 
-	slog.Info("GPX Cartographer startet", "version", version, "adresse", cfg.Addr)
-	logDir("Foto-Ordner", cfg.PhotoDir)
-	logDir("GPX-Ordner", cfg.GPXDir)
+	slog.Info("GPX Cartographer starting", "version", version, "addr", cfg.Addr)
+	logDir("Photo directory", cfg.PhotoDir)
+	logDir("GPX directory", cfg.GPXDir)
 
 	srv := &http.Server{
 		Addr:              cfg.Addr,
@@ -56,20 +56,20 @@ func main() {
 	}()
 
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		slog.Error("Server beendet", "fehler", err)
+		slog.Error("Server stopped", "error", err)
 		os.Exit(1)
 	}
 }
 
 func logDir(label, dir string) {
 	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
-		slog.Warn(label+" nicht gefunden", "pfad", dir)
+		slog.Warn(label+" not found", "path", dir)
 		return
 	}
-	slog.Info(label, "pfad", dir)
+	slog.Info(label, "path", dir)
 }
 
-// healthcheck fragt /healthz des lokal laufenden Servers ab.
+// healthcheck queries /healthz of the locally running server.
 func healthcheck(addr string) int {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {

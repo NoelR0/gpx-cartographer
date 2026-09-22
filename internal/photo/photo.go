@@ -1,5 +1,5 @@
-// Package photo liest Fotos ein (Position, Aufnahmezeit, Grösse) und erzeugt
-// Vorschaubilder.
+// Package photo reads photos (position, capture time, size) and creates
+// thumbnails.
 package photo
 
 import (
@@ -14,25 +14,25 @@ import (
 	"github.com/NoelR0/gpx-cartographer/internal/files"
 )
 
-// Extensions sind die unterstützten Dateiendungen.
+// Extensions are the supported file extensions.
 var Extensions = map[string]bool{".jpg": true, ".jpeg": true, ".png": true}
 
-// Photo beschreibt ein Foto. Die Felder sind nach dem Einlesen unveränderlich;
-// eine nachträgliche Verortung über GPX setzt der Aufrufer auf einer Kopie.
+// Photo describes a photo. Its fields are immutable after loading; the caller
+// applies a later GPX-based location to a copy.
 type Photo struct {
-	ID     string // relativer Pfad
+	ID     string // relative path
 	Name   string
 	HasPos bool
 	Lat    float64
 	Lon    float64
-	Taken  time.Time // Zero, wenn unbekannt
-	Width  int       // bereits gemäss Ausrichtung gedreht
+	Taken  time.Time // zero if unknown
+	Width  int       // already rotated according to orientation
 	Height int
-	// "exif" oder "track"
+	// "exif" or "track"
 	LocatedBy string
 }
 
-// Library liest einen Foto-Ordner und merkt sich die Metadaten im Speicher.
+// Library reads a photo directory and keeps the metadata in memory.
 type Library struct {
 	Dir      string
 	CameraTZ *time.Location
@@ -43,8 +43,8 @@ func NewLibrary(dir string, tz *time.Location) *Library {
 	return &Library{Dir: dir, CameraTZ: tz, cache: files.NewCache[*Photo]()}
 }
 
-// Load durchsucht den Ordner und liefert alle lesbaren Fotos, sortiert nach
-// Aufnahmezeit. Nur neue oder geänderte Dateien werden geöffnet.
+// Load walks the directory and returns all readable photos, sorted by capture
+// time. Only new or changed files are opened.
 func (l *Library) Load() ([]Photo, error) {
 	entries, err := files.Walk(l.Dir, Extensions)
 	if err != nil {
@@ -62,14 +62,14 @@ func (l *Library) Load() ([]Photo, error) {
 		}
 	}
 
-	// Neue Dateien parallel einlesen – es wird nur der Dateikopf gelesen.
+	// Read new files in parallel – only the file header is read.
 	files.Parallel(len(todo), max(4, runtime.NumCPU()), func(k int) {
 		e := entries[todo[k]]
 		p, err := l.read(e)
 		if err != nil {
-			slog.Warn("Foto kann nicht gelesen werden", "datei", e.Rel, "fehler", err)
+			slog.Warn("Cannot read photo", "file", e.Rel, "error", err)
 		}
-		l.cache.Put(e, p) // auch nil merken, damit defekte Dateien nicht ständig neu gelesen werden
+		l.cache.Put(e, p) // remember nil too, so broken files are not read again and again
 		result[todo[k]] = p
 	})
 
@@ -126,7 +126,7 @@ func parseTaken(dt, offset string, tz *time.Location) time.Time {
 	return t
 }
 
-// parseOffset liest einen EXIF-Offset wie "+02:00".
+// parseOffset parses an EXIF offset such as "+02:00".
 func parseOffset(s string) (*time.Location, bool) {
 	if len(s) != 6 || (s[0] != '+' && s[0] != '-') || s[3] != ':' {
 		return nil, false

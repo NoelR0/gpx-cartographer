@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -15,22 +15,22 @@
   <aside id="panel" class="panel">
     <header class="panel-head">
       <h1>GPX Cartographer</h1>
-      <button id="reload" class="icon-btn" title="Ordner neu einlesen" aria-label="Neu laden">⟳</button>
-      <button id="collapse" class="icon-btn" title="Einklappen" aria-label="Seitenleiste ein-/ausklappen">‹</button>
+      <button id="reload" class="icon-btn" title="Rescan directories" aria-label="Reload">⟳</button>
+      <button id="collapse" class="icon-btn" title="Collapse" aria-label="Toggle sidebar">‹</button>
     </header>
     <div class="panel-body">
-      <div id="status" class="status">Lade…</div>
+      <div id="status" class="status">Loading…</div>
       <div class="toggles">
-        <label><input type="checkbox" id="show-photos" checked> Fotos <span id="count-photos" class="badge">0</span></label>
+        <label><input type="checkbox" id="show-photos" checked> Photos <span id="count-photos" class="badge">0</span></label>
         <label><input type="checkbox" id="show-tracks" checked> Tracks <span id="count-tracks" class="badge">0</span></label>
       </div>
-      <button id="fit-all" class="text-btn">Alles anzeigen</button>
+      <button id="fit-all" class="text-btn">Show all</button>
       <h2>Tracks</h2>
       <ul id="track-list" class="track-list"></ul>
     </div>
     <footer id="version" class="panel-foot"></footer>
   </aside>
-  <button id="expand" class="panel-expand" title="Seitenleiste öffnen" aria-label="Seitenleiste öffnen">☰</button>
+  <button id="expand" class="panel-expand" title="Open sidebar" aria-label="Open sidebar">☰</button>
 
   <div id="lightbox" class="lightbox" hidden>
     <div class="lb-top">
@@ -38,14 +38,14 @@
         <div id="lb-title" class="lb-title"></div>
         <div id="lb-meta" class="lb-meta"></div>
       </div>
-      <a id="lb-download" class="lb-btn" title="Original herunterladen" download>⤓</a>
-      <button id="lb-locate" class="lb-btn" title="Auf Karte zeigen">⌖</button>
-      <button id="lb-close" class="lb-btn" title="Schliessen (Esc)">✕</button>
+      <a id="lb-download" class="lb-btn" title="Download original" download>⤓</a>
+      <button id="lb-locate" class="lb-btn" title="Show on map">⌖</button>
+      <button id="lb-close" class="lb-btn" title="Close (Esc)">✕</button>
     </div>
     <div class="lb-stage">
-      <button id="lb-prev" class="lb-nav prev" aria-label="Vorheriges Foto">‹</button>
+      <button id="lb-prev" class="lb-nav prev" aria-label="Previous photo">‹</button>
       <img id="lb-img" alt="">
-      <button id="lb-next" class="lb-nav next" aria-label="Nächstes Foto">›</button>
+      <button id="lb-next" class="lb-nav next" aria-label="Next photo">›</button>
     </div>
     <div id="lb-strip" class="lb-strip"></div>
   </div>

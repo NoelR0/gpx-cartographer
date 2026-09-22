@@ -6,8 +6,8 @@ import (
 	"math"
 )
 
-// downscale verkleinert src so, dass es in limit×limit passt
-// (Flächenmittelung). Kleinere Bilder werden nicht vergrössert.
+// downscale shrinks src to fit into limit×limit (area averaging). Smaller
+// images are not enlarged.
 func downscale(src image.Image, limit int) *image.RGBA {
 	b := src.Bounds()
 	sw, sh := b.Dx(), b.Dy()
@@ -20,7 +20,7 @@ func downscale(src image.Image, limit int) *image.RGBA {
 		}
 	}
 
-	// Pro Zielpixel Summe von R, G, B und Anzahl
+	// per target pixel: sum of R, G, B and count
 	acc := make([]uint32, dw*dh*4)
 	xmap := make([]int, sw)
 	for x := range xmap {
@@ -55,7 +55,7 @@ func downscale(src image.Image, limit int) *image.RGBA {
 		case *image.NRGBA:
 			addRGBA(acc, img.Pix[img.PixOffset(b.Min.X, b.Min.Y+y):], sw, row, xmap)
 		default:
-			// Langsamer, allgemeiner Weg (z. B. CMYK-JPEG, Paletten-PNG)
+			// slow, generic path (e.g. CMYK JPEG, paletted PNG)
 			for x := 0; x < sw; x++ {
 				r, g, bb, _ := src.At(b.Min.X+x, b.Min.Y+y).RGBA()
 				a := acc[(row+xmap[x])*4:]
@@ -82,7 +82,7 @@ func downscale(src image.Image, limit int) *image.RGBA {
 	return dst
 }
 
-// addRGBA summiert eine Zeile RGBA/NRGBA-Pixel (Alpha wird ignoriert).
+// addRGBA accumulates a row of RGBA/NRGBA pixels (alpha is ignored).
 func addRGBA(acc []uint32, pix []uint8, sw, row int, xmap []int) {
 	for x := 0; x < sw; x++ {
 		p := pix[x*4:]
@@ -94,8 +94,8 @@ func addRGBA(acc []uint32, pix []uint8, sw, row int, xmap []int) {
 	}
 }
 
-// orient dreht bzw. spiegelt img entsprechend der EXIF-Ausrichtung (1–8),
-// sodass es aufrecht angezeigt wird.
+// orient rotates or flips img according to the EXIF orientation (1–8) so
+// that it is displayed upright.
 func orient(img *image.RGBA, o int) *image.RGBA {
 	if o <= 1 || o > 8 {
 		return img
@@ -108,22 +108,22 @@ func orient(img *image.RGBA, o int) *image.RGBA {
 	dst := image.NewRGBA(image.Rect(0, 0, dw, dh))
 	for dy := 0; dy < dh; dy++ {
 		for dx := 0; dx < dw; dx++ {
-			// Quellpixel zum Zielpixel (dx, dy)
+			// source pixel for target pixel (dx, dy)
 			var sx, sy int
 			switch o {
-			case 2: // horizontal gespiegelt
+			case 2: // flipped horizontally
 				sx, sy = w-1-dx, dy
-			case 3: // 180° gedreht
+			case 3: // rotated 180°
 				sx, sy = w-1-dx, h-1-dy
-			case 4: // vertikal gespiegelt
+			case 4: // flipped vertically
 				sx, sy = dx, h-1-dy
-			case 5: // an der Hauptdiagonale gespiegelt
+			case 5: // transposed (flipped along the main diagonal)
 				sx, sy = dy, dx
-			case 6: // muss 90° im Uhrzeigersinn gedreht werden
+			case 6: // needs a 90° clockwise rotation
 				sx, sy = dy, h-1-dx
-			case 7: // an der Nebendiagonale gespiegelt
+			case 7: // transversed (flipped along the anti-diagonal)
 				sx, sy = w-1-dy, h-1-dx
-			case 8: // muss 90° gegen den Uhrzeigersinn gedreht werden
+			case 8: // needs a 90° counterclockwise rotation
 				sx, sy = w-1-dy, dx
 			}
 			copy(dst.Pix[dst.PixOffset(dx, dy):][:4], img.Pix[img.PixOffset(sx, sy):][:4])
@@ -132,9 +132,9 @@ func orient(img *image.RGBA, o int) *image.RGBA {
 	return dst
 }
 
-// cropToAspect schneidet img mittig auf das Seitenverhältnis w:h zu. Manche
-// Kameras betten das Vorschaubild immer als 4:3 ein und füllen den Rest mit
-// schwarzen Balken, wenn das Foto z. B. 16:9 ist.
+// cropToAspect center-crops img to the aspect ratio w:h. Some cameras always
+// embed the thumbnail as 4:3 and fill the rest with black bars when the photo
+// is e.g. 16:9.
 func cropToAspect(img image.Image, w, h int) image.Image {
 	b := img.Bounds()
 	tw, th := b.Dx(), b.Dy()
@@ -147,11 +147,11 @@ func cropToAspect(img image.Image, w, h int) image.Image {
 		return img
 	}
 	r := b
-	if have > want { // zu breit -> links/rechts abschneiden
+	if have > want { // too wide -> crop left/right
 		nw := int(float64(th)*want + 0.5)
 		r.Min.X += (tw - nw) / 2
 		r.Max.X = r.Min.X + nw
-	} else { // zu hoch -> oben/unten abschneiden
+	} else { // too tall -> crop top/bottom
 		nh := int(float64(tw)/want + 0.5)
 		r.Min.Y += (th - nh) / 2
 		r.Max.Y = r.Min.Y + nh

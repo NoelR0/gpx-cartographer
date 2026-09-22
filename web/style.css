@@ -24,7 +24,7 @@
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); }
 #map { position: fixed; inset: 0; }
 
-/* ---------- Seitenleiste ---------- */
+/* ---------- Sidebar ---------- */
 .panel {
   position: fixed; z-index: 1000;
   top: 12px; left: 12px; bottom: 12px;
@@ -88,7 +88,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); }
 .track-list .sub { font-size: 12px; color: var(--muted); grid-column: 2; }
 .track-list .empty { cursor: default; color: var(--muted); font-size: 13px; display: block; }
 
-/* ---------- Foto-Marker ---------- */
+/* ---------- Photo markers ---------- */
 .photo-marker {
   width: 100%; height: 100%;
   border: 3px solid #fff; border-radius: 8px; overflow: hidden;
@@ -109,14 +109,14 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); }
 .photo-cluster { background: transparent; }
 .photo-cluster .photo-marker { position: relative; overflow: visible; }
 .photo-cluster .photo-marker img { border-radius: 5px; }
-/* angedeuteter Stapel */
+/* hinted stack */
 .photo-cluster .photo-marker::before {
   content: ""; position: absolute; inset: -3px; z-index: -1;
   border-radius: 8px; background: #fff; transform: rotate(7deg);
   box-shadow: 0 2px 6px rgba(0, 0, 0, .35);
 }
 
-/* ---------- Track-Popup ---------- */
+/* ---------- Track popup ---------- */
 .track-popup h3 { margin: 0 0 4px; font-size: 15px; }
 .track-popup .stats { color: #555; font-size: 13px; line-height: 1.5; }
 .track-popup .actions { margin-top: 8px; display: flex; gap: 12px; font-size: 13px; }

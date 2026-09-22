@@ -1,4 +1,4 @@
-// Package web enthält die Weboberfläche, die in die Binary eingebettet wird.
+// Package web contains the web UI that is embedded into the binary.
 package web
 
 import "embed"

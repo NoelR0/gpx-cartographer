@@ -1,11 +1,11 @@
-# Baut bei jedem Versions-Tag (z. B. v0.2.0) ein Docker-Image für amd64 und
-# arm64 und veröffentlicht es unter ghcr.io/<owner>/gpx-cartographer.
+# On every version tag (e.g. v0.2.0), builds a Docker image for amd64 and
+# arm64 and publishes it as ghcr.io/<owner>/gpx-cartographer.
 #
-#   git tag -a v0.2.0 -m "Beschreibung"
+#   git tag -a v0.2.0 -m "Description"
 #   git push origin v0.2.0
 #
-# Erzeugte Image-Tags für v0.2.0: 0.2.0, 0.2, latest
-#                    für v1.4.2: 1.4.2, 1.4, 1, latest
+# Resulting image tags for v0.2.0: 0.2.0, 0.2, latest
+#                     for v1.4.2: 1.4.2, 1.4, 1, latest
 
 name: Release
 
@@ -25,7 +25,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Image-Tags bestimmen
+      - name: Determine image tags
         id: meta
         uses: docker/metadata-action@v6
         with:
@@ -33,22 +33,22 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            # Kein Tag "0": unter v0.x darf sich laut Semver alles ändern
+            # No "0" tag: under v0.x, semver allows anything to change
             type=semver,pattern={{major}},enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }}
 
-      - name: Buildx einrichten
+      - name: Set up Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Bei ghcr.io anmelden
+      - name: Log in to ghcr.io
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Das Dockerfile kompiliert per GOARCH für die Zielplattform,
-      # daher ist keine QEMU-Emulation nötig.
-      - name: Bauen und veröffentlichen
+      # The Dockerfile cross-compiles via GOARCH for the target platform,
+      # so no QEMU emulation is needed.
+      - name: Build and push
         uses: docker/build-push-action@v7
         with:
           context: .

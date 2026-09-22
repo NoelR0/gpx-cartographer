@@ -1,9 +1,9 @@
-// Package gpx liest GPX-Dateien (Tracks und Routen), berechnet Statistiken
-// und speichert die Geometrie speichersparend:
+// Package gpx reads GPX files (tracks and routes), computes statistics and
+// stores the geometry in a memory-efficient way:
 //
-//   - Für die Kartenanzeige wird jedes Segment mit Douglas-Peucker vereinfacht.
-//   - Für die Verortung von Fotos bleibt ein kompakter Zeitindex mit allen
-//     Punkten erhalten (12 Byte pro Punkt).
+//   - For display on the map, every segment is simplified with Douglas-Peucker.
+//   - For locating photos, a compact time index with all points is kept
+//     (12 bytes per point).
 package gpx
 
 import (
@@ -18,33 +18,33 @@ import (
 	"unicode/utf8"
 )
 
-// Höhenänderungen unter diesem Wert gelten als GPS-Rauschen.
+// Elevation changes below this value are treated as GPS noise.
 const elevationThreshold = 5.0
 
-// Track ist ein <trk> oder eine <rte> aus einer GPX-Datei.
+// Track is a <trk> or an <rte> from a GPX file.
 type Track struct {
-	ID   string // "<datei>#<index>"
+	ID   string // "<file>#<index>"
 	Name string
-	File string // relativer Pfad der GPX-Datei
+	File string // relative path of the GPX file
 
 	DistanceM float64
 	AscentM   float64
 	DescentM  float64
-	Start     time.Time // Zero, wenn der Track keine Zeitstempel hat
+	Start     time.Time // zero if the track has no timestamps
 	End       time.Time
 
-	// Vereinfachte Geometrie für die Karte: pro Segment abwechselnd
-	// Breite, Länge in 1e-7 Grad.
+	// Simplified geometry for the map: per segment, alternating
+	// latitude, longitude in 1e-7 degrees.
 	Segments [][]int32
 
-	// Zeitindex aller Punkte mit Zeitstempel, nach Zeit sortiert.
-	// times sind Sekunden seit Start.
+	// Time index of all points with a timestamp, sorted by time.
+	// times are seconds since Start.
 	lats, lons, times []int32
 }
 
-// Options steuert das Einlesen.
+// Options controls parsing.
 type Options struct {
-	// Maximale Abweichung der vereinfachten Linie in Metern (0 = aus).
+	// Maximum deviation of the simplified line in meters (0 = off).
 	SimplifyM float64
 }
 
@@ -52,7 +52,7 @@ type point struct {
 	lat, lon float64
 	ele      float64
 	hasEle   bool
-	t        int64 // Unix-Sekunden
+	t        int64 // Unix seconds
 	hasTime  bool
 }
 
@@ -63,7 +63,7 @@ type rawPoint struct {
 	Time string `xml:"time"`
 }
 
-// Parse liest alle Tracks und Routen aus r. rel ist der relative Dateipfad.
+// Parse reads all tracks and routes from r. rel is the relative file path.
 func Parse(r io.Reader, rel string, opt Options) ([]*Track, error) {
 	dec := xml.NewDecoder(r)
 	dec.Strict = false
@@ -105,7 +105,7 @@ func Parse(r io.Reader, rel string, opt Options) ([]*Track, error) {
 				if p, ok := rp.parse(); ok {
 					cur.add(p)
 				}
-				continue // DecodeElement hat das End-Element bereits gelesen
+				continue // DecodeElement has already consumed the end element
 			case name == "name" && (parent == "trk" || parent == "rte") && cur != nil:
 				var s string
 				if err := dec.DecodeElement(&s, &el); err != nil {
@@ -130,25 +130,25 @@ func Parse(r io.Reader, rel string, opt Options) ([]*Track, error) {
 		}
 	}
 	if !sawGPX {
-		return nil, errors.New("gpx: kein <gpx>-Element gefunden")
+		return nil, errors.New("gpx: no <gpx> element found")
 	}
 	return tracks, nil
 }
 
-// charsetReader akzeptiert neben UTF-8 auch Latin-1, das manche ältere
-// Geräte in die XML-Deklaration schreiben.
+// charsetReader accepts Latin-1 in addition to UTF-8, which some older
+// devices write into the XML declaration.
 func charsetReader(label string, in io.Reader) (io.Reader, error) {
 	switch strings.ToLower(label) {
 	case "iso-8859-1", "iso8859-1", "latin1", "latin-1", "windows-1252", "cp1252":
 		return &latin1Reader{r: in}, nil
 	}
-	return in, nil // us-ascii, utf-8 und Unbekanntes unverändert lesen
+	return in, nil // read us-ascii, utf-8 and unknown charsets unchanged
 }
 
 type latin1Reader struct {
 	r       io.Reader
 	buf     []byte
-	pending []byte // bereits nach UTF-8 umgewandelt, noch nicht ausgeliefert
+	pending []byte // already converted to UTF-8, not yet returned
 	err     error
 }
 
@@ -198,14 +198,14 @@ func parseTime(s string) (time.Time, bool) {
 	if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
 		return t, true
 	}
-	// Ohne Zeitzone: GPX-Zeiten sind laut Spezifikation UTC
+	// Without a time zone: per the spec, GPX times are UTC
 	if t, err := time.Parse("2006-01-02T15:04:05.999999999", s); err == nil {
 		return t, true
 	}
 	return time.Time{}, false
 }
 
-// ---------------------------------------------------------------- Aufbau
+// ---------------------------------------------------------------- Building
 
 type timedPoint struct {
 	t        int64
@@ -245,7 +245,7 @@ func (b *builder) add(p point) {
 	}
 }
 
-// endSegment rechnet das aktuelle Segment ab und gibt dessen Punkte frei.
+// endSegment accounts for the current segment and releases its points.
 func (b *builder) endSegment() {
 	seg := b.seg
 	b.seg = b.seg[:0]
@@ -262,7 +262,7 @@ func (b *builder) endSegment() {
 		if !p.hasEle {
 			continue
 		}
-		// Hysterese gegen GPS-Höhenrauschen
+		// hysteresis against GPS elevation noise
 		switch {
 		case !hasRef:
 			ref, hasRef = p.ele, true
@@ -306,11 +306,11 @@ func (b *builder) finish() *Track {
 	return t
 }
 
-// ---------------------------------------------------------------- Geometrie
+// ---------------------------------------------------------------- Geometry
 
 func e7(v float64) int32 { return int32(math.Round(v * 1e7)) }
 
-// FromE7 wandelt einen gespeicherten Koordinatenwert zurück in Grad.
+// FromE7 converts a stored coordinate value back to degrees.
 func FromE7(v int32) float64 { return float64(v) / 1e7 }
 
 const earthRadius = 6371000.0
@@ -323,9 +323,9 @@ func haversine(a, b point) float64 {
 	return 2 * earthRadius * math.Asin(math.Min(1, math.Sqrt(h)))
 }
 
-// simplify liefert die Indizes der Punkte, die nach Douglas-Peucker mit
-// Toleranz tol (Meter) erhalten bleiben. Iterativ, damit sehr lange Tracks
-// keinen tiefen Rekursionsstapel erzeugen.
+// simplify returns the indices of the points kept by Douglas-Peucker with
+// tolerance tol (meters). Iterative, so that very long tracks do not cause
+// deep recursion.
 func simplify(seg []point, tol float64) []int {
 	n := len(seg)
 	if n <= 2 || tol <= 0 {
@@ -336,7 +336,7 @@ func simplify(seg []point, tol float64) []int {
 		return idx
 	}
 
-	// Lokale flache Projektion in Metern – für die kurzen Abstände genau genug.
+	// Local flat projection in meters – accurate enough for short distances.
 	lat0 := seg[0].lat * math.Pi / 180
 	kx := math.Cos(lat0) * earthRadius * math.Pi / 180
 	ky := earthRadius * math.Pi / 180
@@ -374,7 +374,7 @@ func simplify(seg []point, tol float64) []int {
 	return out
 }
 
-// segDist2 ist der quadrierte Abstand von (px,py) zur Strecke a–b.
+// segDist2 is the squared distance from (px,py) to the segment a–b.
 func segDist2(px, py, ax, ay, bx, by float64) float64 {
 	dx, dy := bx-ax, by-ay
 	if dx != 0 || dy != 0 {
@@ -390,11 +390,11 @@ func segDist2(px, py, ax, ay, bx, by float64) float64 {
 	return dx*dx + dy*dy
 }
 
-// ---------------------------------------------------------------- Verortung
+// ---------------------------------------------------------------- Locating
 
-// Locate sucht die Position zum Zeitpunkt when auf einem der Tracks.
-// Liegt when zwischen zwei Punkten, wird linear interpoliert. maxGap ist der
-// grösste erlaubte Zeitabstand zu einem Trackpunkt.
+// Locate finds the position at time when on one of the tracks. If when lies
+// between two points, it interpolates linearly. maxGap is the largest allowed
+// time distance to a track point.
 func Locate(tracks []*Track, when time.Time, maxGap time.Duration) (lat, lon float64, ok bool) {
 	gap := int64(maxGap / time.Second)
 	best := int64(math.MaxInt64)
@@ -424,7 +424,7 @@ func Locate(tracks []*Track, when time.Time, maxGap time.Duration) (lat, lon flo
 				continue
 			}
 		}
-		// Nur ein Nachbar in Reichweite -> diesen Punkt nehmen
+		// only one neighbor within range -> use that point
 		for _, j := range []int{i - 1, i} {
 			if j < 0 || j >= len(t.times) {
 				continue
@@ -441,7 +441,7 @@ func Locate(tracks []*Track, when time.Time, maxGap time.Duration) (lat, lon flo
 	return lat, lon, ok
 }
 
-// PointCount liefert (gespeicherte Kartenpunkte, Punkte im Zeitindex).
+// PointCount returns (stored map points, points in the time index).
 func (t *Track) PointCount() (display, timed int) {
 	for _, s := range t.Segments {
 		display += len(s) / 2

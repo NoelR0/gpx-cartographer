@@ -1,9 +1,9 @@
-// Package exif liest die für GPX Cartographer relevanten Metadaten aus JPEG- und
-// PNG-Dateien: Bildgrösse, Ausrichtung, GPS-Position, Aufnahmezeit und das
-// eingebettete Vorschaubild. Es wird nur der Dateikopf gelesen, nie die
-// eigentlichen Bilddaten.
+// Package exif reads the metadata relevant to GPX Cartographer from JPEG and
+// PNG files: image size, orientation, GPS position, capture time and the
+// embedded thumbnail. Only the file header is read, never the actual image
+// data.
 //
-// Implementiert nach der EXIF-2.32- bzw. TIFF-6.0-Spezifikation.
+// Implemented according to the EXIF 2.32 and TIFF 6.0 specifications.
 package exif
 
 import (
@@ -16,28 +16,28 @@ import (
 	"strings"
 )
 
-// Meta enthält alles, was aus dem Dateikopf gelesen wurde.
+// Meta holds everything read from the file header.
 type Meta struct {
-	// Grösse der gespeicherten Pixel, ohne Berücksichtigung der Ausrichtung.
+	// Size of the stored pixels, not accounting for orientation.
 	Width, Height int
-	// EXIF-Ausrichtung 1–8 (1 = normal).
+	// EXIF orientation 1–8 (1 = normal).
 	Orientation int
 
 	HasGPS   bool
 	Lat, Lon float64
 
-	// Aufnahmezeit im EXIF-Format "2006:01:02 15:04:05" (Ortszeit der Kamera).
+	// Capture time in EXIF format "2006:01:02 15:04:05" (camera local time).
 	DateTime string
-	// Zeitzonen-Offset wie "+02:00", falls von der Kamera gespeichert.
+	// Time zone offset such as "+02:00", if stored by the camera.
 	Offset string
 
-	// Eingebettetes JPEG-Vorschaubild (IFD1), nil wenn nicht vorhanden.
+	// Embedded JPEG thumbnail (IFD1), nil if not present.
 	Thumbnail []byte
 }
 
-var ErrNotSupported = errors.New("exif: dateiformat nicht unterstützt")
+var ErrNotSupported = errors.New("exif: file format not supported")
 
-// Read erkennt das Format anhand der ersten Bytes und liest die Metadaten.
+// Read detects the format from the first bytes and reads the metadata.
 func Read(r io.Reader) (*Meta, error) {
 	br := bufio.NewReaderSize(r, 64*1024)
 	head, err := br.Peek(8)
@@ -62,7 +62,7 @@ func readJPEG(r *bufio.Reader) (*Meta, error) {
 	}
 	var exifSeen, sizeSeen bool
 	for {
-		// Marker suchen; beliebig viele 0xFF-Füllbytes sind erlaubt.
+		// Find the marker; any number of 0xFF fill bytes is allowed.
 		b, err := r.ReadByte()
 		if err != nil {
 			return nil, err
@@ -79,11 +79,11 @@ func readJPEG(r *bufio.Reader) (*Meta, error) {
 		}
 		switch {
 		case marker == 0xD8, marker == 0x01, marker >= 0xD0 && marker <= 0xD7:
-			continue // Marker ohne Nutzdaten
+			continue // markers without payload
 		case marker == 0xD9 || marker == 0xDA:
-			// EOI oder Start of Scan: ab hier folgen nur noch Bilddaten
+			// EOI or Start of Scan: only image data follows from here
 			if !sizeSeen {
-				return nil, errors.New("exif: keine Bildgrösse im JPEG-Kopf")
+				return nil, errors.New("exif: no image size in JPEG header")
 			}
 			return m, nil
 		}
@@ -94,7 +94,7 @@ func readJPEG(r *bufio.Reader) (*Meta, error) {
 		}
 		n := int(binary.BigEndian.Uint16(lenBuf[:])) - 2
 		if n < 0 {
-			return nil, errors.New("exif: ungültige Segmentlänge")
+			return nil, errors.New("exif: invalid segment length")
 		}
 
 		switch {
@@ -105,7 +105,7 @@ func readJPEG(r *bufio.Reader) (*Meta, error) {
 			}
 			if bytes.HasPrefix(seg, []byte("Exif\x00\x00")) {
 				exifSeen = true
-				// Fehlerhafte EXIF-Daten sind kein Grund, das Foto zu verwerfen.
+				// Broken EXIF data is no reason to discard the photo.
 				_ = parseTIFF(seg[6:], m)
 			}
 		case isSOF(marker):
@@ -126,7 +126,7 @@ func readJPEG(r *bufio.Reader) (*Meta, error) {
 	}
 }
 
-// SOF0–SOF15 ausser DHT (C4), JPG (C8) und DAC (CC).
+// SOF0–SOF15 except DHT (C4), JPG (C8) and DAC (CC).
 func isSOF(m byte) bool {
 	return m >= 0xC0 && m <= 0xCF && m != 0xC4 && m != 0xC8 && m != 0xCC
 }
@@ -150,7 +150,7 @@ func readPNG(r *bufio.Reader) (*Meta, error) {
 		switch typ {
 		case "IHDR", "eXIf":
 			if n > 16<<20 {
-				return nil, errors.New("exif: PNG-Chunk zu gross")
+				return nil, errors.New("exif: PNG chunk too large")
 			}
 			data := make([]byte, n)
 			if _, err := io.ReadFull(r, data); err != nil {
@@ -166,7 +166,7 @@ func readPNG(r *bufio.Reader) (*Meta, error) {
 				return nil, err
 			}
 		case "IDAT", "IEND":
-			// eXIf muss laut Spezifikation vor IDAT stehen
+			// per the spec, eXIf must come before IDAT
 			return m, nil
 		default:
 			if _, err := r.Discard(n + 4); err != nil {
@@ -194,13 +194,13 @@ const (
 	tagGPSLongitude    = 0x0004
 )
 
-// Byte-Grösse der TIFF-Datentypen (Index = Typ-Nummer).
+// Byte size of the TIFF data types (index = type number).
 var typeSize = [...]int{0, 1, 1, 2, 4, 8, 1, 1, 2, 4, 8, 4, 8}
 
 type entry struct {
 	typ   uint16
 	count uint32
-	raw   [4]byte // Wert oder Offset
+	raw   [4]byte // value or offset
 }
 
 type tiff struct {
@@ -210,7 +210,7 @@ type tiff struct {
 
 func parseTIFF(data []byte, m *Meta) error {
 	if len(data) < 8 {
-		return errors.New("exif: TIFF-Kopf zu kurz")
+		return errors.New("exif: TIFF header too short")
 	}
 	t := &tiff{data: data}
 	switch string(data[:2]) {
@@ -219,10 +219,10 @@ func parseTIFF(data []byte, m *Meta) error {
 	case "MM":
 		t.bo = binary.BigEndian
 	default:
-		return errors.New("exif: unbekannte Byte-Reihenfolge")
+		return errors.New("exif: unknown byte order")
 	}
 	if t.bo.Uint16(data[2:4]) != 42 {
-		return errors.New("exif: keine TIFF-Kennung")
+		return errors.New("exif: missing TIFF magic number")
 	}
 
 	ifd0, next, err := t.readIFD(t.bo.Uint32(data[4:8]))
@@ -259,7 +259,7 @@ func parseTIFF(data []byte, m *Meta) error {
 		}
 	}
 
-	// IFD1 enthält das Vorschaubild
+	// IFD1 contains the thumbnail
 	if next != 0 {
 		if ifd1, _, err := t.readIFD(next); err == nil {
 			off, ok1 := ifd1[tagThumbOffset]
@@ -279,12 +279,12 @@ func parseTIFF(data []byte, m *Meta) error {
 func (t *tiff) readIFD(off uint32) (map[uint16]entry, uint32, error) {
 	o := int(off)
 	if o < 8 || o+2 > len(t.data) {
-		return nil, 0, fmt.Errorf("exif: IFD-Offset %d ausserhalb der Daten", off)
+		return nil, 0, fmt.Errorf("exif: IFD offset %d out of bounds", off)
 	}
 	n := int(t.bo.Uint16(t.data[o:]))
 	o += 2
 	if n > 1000 || o+n*12+4 > len(t.data) {
-		return nil, 0, errors.New("exif: IFD abgeschnitten")
+		return nil, 0, errors.New("exif: IFD truncated")
 	}
 	entries := make(map[uint16]entry, n)
 	for i := 0; i < n; i++ {
@@ -299,7 +299,7 @@ func (t *tiff) readIFD(off uint32) (map[uint16]entry, uint32, error) {
 	return entries, next, nil
 }
 
-// bytes liefert die Rohdaten eines Eintrags (inline oder über den Offset).
+// bytes returns the raw data of an entry (inline or via the offset).
 func (t *tiff) bytes(e entry) []byte {
 	if int(e.typ) >= len(typeSize) || e.typ == 0 {
 		return nil
@@ -336,7 +336,7 @@ func (t *tiff) ascii(e entry) string {
 	return strings.TrimSpace(string(b))
 }
 
-// rationals liest vorzeichenlose Brüche (Typ 5) als float64.
+// rationals reads rationals (type 5, or signed type 10) as float64.
 func (t *tiff) rationals(e entry) []float64 {
 	if e.typ != 5 && e.typ != 10 {
 		return nil
@@ -374,7 +374,7 @@ func (t *tiff) readGPS(gps map[uint16]entry, m *Meta) {
 	if e, ok := gps[tagGPSLongitudeRef]; ok && strings.EqualFold(t.ascii(e), "W") {
 		lon = -lon
 	}
-	// 0/0 ("Null Island") schreiben manche Apps, wenn sie keinen Fix hatten
+	// some apps write 0/0 ("Null Island") when they had no fix
 	if lat == 0 && lon == 0 || lat < -90 || lat > 90 || lon < -180 || lon > 180 {
 		return
 	}

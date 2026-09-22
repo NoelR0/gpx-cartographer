@@ -1,6 +1,6 @@
-// Package files durchsucht Verzeichnisse und merkt sich pro Datei ein
-// Ergebnis im Speicher, solange sich Änderungszeit und Grösse nicht ändern.
-// Auf die Platte wird nichts geschrieben.
+// Package files walks directories and keeps one result per file in memory
+// for as long as its modification time and size do not change. Nothing is
+// written to disk.
 package files
 
 import (
@@ -13,19 +13,19 @@ import (
 	"time"
 )
 
-// Entry ist eine gefundene Datei.
+// Entry is a file that was found.
 type Entry struct {
-	Path    string // absoluter Pfad
-	Rel     string // relativer Pfad mit '/'
+	Path    string // absolute path
+	Rel     string // relative path with '/'
 	Size    int64
 	ModTime time.Time
 }
 
 func (e Entry) stamp() stamp { return stamp{e.ModTime.UnixNano(), e.Size} }
 
-// Walk liefert alle Dateien unter root mit einer der Endungen (klein
-// geschrieben, mit Punkt). Versteckte Dateien und Ordner – z. B. .stversions
-// und .stfolder von Syncthing – werden übersprungen.
+// Walk returns all files under root with one of the extensions (lower case,
+// with dot). Hidden files and directories – e.g. Syncthing's .stversions and
+// .stfolder – are skipped.
 func Walk(root string, exts map[string]bool) ([]Entry, error) {
 	var out []Entry
 	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
@@ -33,7 +33,7 @@ func Walk(root string, exts map[string]bool) ([]Entry, error) {
 			if p == root {
 				return err
 			}
-			return nil // unlesbare Unterordner ignorieren
+			return nil // ignore unreadable subdirectories
 		}
 		if p != root && strings.HasPrefix(d.Name(), ".") {
 			if d.IsDir() {
@@ -58,8 +58,8 @@ func Walk(root string, exts map[string]bool) ([]Entry, error) {
 	return out, err
 }
 
-// Open öffnet rel innerhalb von root. Pfade, die aus root hinausführen
-// (auch über Symlinks), versteckte Pfade und fremde Endungen werden abgelehnt.
+// Open opens rel inside root. Paths that lead outside of root (including via
+// symlinks), hidden paths and other extensions are rejected.
 func Open(root, rel string, exts map[string]bool) (*os.File, fs.FileInfo, error) {
 	rel = path.Clean("/" + rel)[1:]
 	if rel == "" || !exts[strings.ToLower(path.Ext(rel))] {
@@ -92,7 +92,7 @@ type cached[T any] struct {
 	value T
 }
 
-// Cache hält pro Dateipfad ein Ergebnis vom Typ T.
+// Cache holds one result of type T per file path.
 type Cache[T any] struct {
 	mu sync.Mutex
 	m  map[string]cached[T]
@@ -100,7 +100,7 @@ type Cache[T any] struct {
 
 func NewCache[T any]() *Cache[T] { return &Cache[T]{m: map[string]cached[T]{}} }
 
-// Get liefert den gespeicherten Wert, wenn die Datei unverändert ist.
+// Get returns the stored value if the file is unchanged.
 func (c *Cache[T]) Get(e Entry) (T, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -118,7 +118,7 @@ func (c *Cache[T]) Put(e Entry, v T) {
 	c.mu.Unlock()
 }
 
-// Prune entfernt Einträge von Dateien, die nicht mehr existieren.
+// Prune removes entries for files that no longer exist.
 func (c *Cache[T]) Prune(alive []Entry) {
 	keep := make(map[string]bool, len(alive))
 	for _, e := range alive {
@@ -133,8 +133,8 @@ func (c *Cache[T]) Prune(alive []Entry) {
 	c.mu.Unlock()
 }
 
-// Parallel ruft fn(i) für alle i in [0, n) mit höchstens workers
-// gleichzeitigen Goroutinen auf und wartet auf alle.
+// Parallel calls fn(i) for all i in [0, n) using at most workers concurrent
+// goroutines and waits for all of them.
 func Parallel(n, workers int, fn func(i int)) {
 	workers = min(n, max(1, workers))
 	next := make(chan int)

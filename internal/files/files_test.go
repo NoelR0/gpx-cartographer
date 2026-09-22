@@ -21,7 +21,7 @@ func setup(t *testing.T) string {
 		}
 	}
 	outside := filepath.Join(t.TempDir(), "secret.jpg")
-	_ = os.WriteFile(outside, []byte("geheim"), 0o644)
+	_ = os.WriteFile(outside, []byte("secret"), 0o644)
 	_ = os.Symlink(outside, filepath.Join(root, "link.jpg"))
 	return root
 }
@@ -38,13 +38,13 @@ func TestWalk(t *testing.T) {
 	for _, e := range entries {
 		got = append(got, e.Rel)
 	}
-	// Symlinks auf Dateien sind keine regulären Dateien -> werden übersprungen
+	// symlinks to files are not regular files -> skipped
 	want := []string{"a.jpg", "sub/b.JPG"}
 	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
-		t.Errorf("Walk = %v, erwartet %v", got, want)
+		t.Errorf("Walk = %v, want %v", got, want)
 	}
-	if _, err := Walk(filepath.Join(root, "gibtsnicht"), jpg); err == nil {
-		t.Error("Fehler für fehlenden Ordner erwartet")
+	if _, err := Walk(filepath.Join(root, "doesnotexist"), jpg); err == nil {
+		t.Error("expected an error for a missing directory")
 	}
 }
 
@@ -52,7 +52,7 @@ func TestOpen(t *testing.T) {
 	root := setup(t)
 	ok := []string{"a.jpg", "sub/b.JPG", "/a.jpg", "sub/../a.jpg"}
 	bad := []string{"", "notes.txt", ".hidden.jpg", ".stversions/old.jpg", "../secret.jpg",
-		"../../../../etc/passwd", "link.jpg", "sub", "fehlt.jpg"}
+		"../../../../etc/passwd", "link.jpg", "sub", "missing.jpg"}
 	for _, p := range ok {
 		f, _, err := Open(root, p, jpg)
 		if err != nil {
@@ -64,7 +64,7 @@ func TestOpen(t *testing.T) {
 	for _, p := range bad {
 		if f, _, err := Open(root, p, jpg); err == nil {
 			f.Close()
-			t.Errorf("%q hätte abgelehnt werden müssen", p)
+			t.Errorf("%q should have been rejected", p)
 		}
 	}
 }
@@ -74,15 +74,15 @@ func TestCache(t *testing.T) {
 	e := Entry{Path: "/x", Size: 1}
 	c.Put(e, 42)
 	if v, ok := c.Get(e); !ok || v != 42 {
-		t.Error("Treffer erwartet")
+		t.Error("expected a hit")
 	}
 	changed := e
 	changed.Size = 2
 	if _, ok := c.Get(changed); ok {
-		t.Error("geänderte Datei darf kein Treffer sein")
+		t.Error("a changed file must not be a hit")
 	}
 	c.Prune(nil)
 	if _, ok := c.Get(e); ok {
-		t.Error("Prune hat nicht aufgeräumt")
+		t.Error("Prune did not clean up")
 	}
 }

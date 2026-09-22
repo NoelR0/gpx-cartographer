@@ -62,19 +62,19 @@ func (s *server) routes() http.Handler {
 func securityHeaders(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		// Kachelserver wie tile.openstreetmap.org verlangen einen Referer
+		// tile servers such as tile.openstreetmap.org require a Referer
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		h.ServeHTTP(w, r)
 	})
 }
 
-// ---------------------------------------------------------------- Daten
+// ---------------------------------------------------------------- Data
 
 func (s *server) loadTracks() []*gpx.Track {
 	entries, err := files.Walk(s.cfg.GPXDir, gpxExtensions)
 	if err != nil {
 		if !errors.Is(err, fs.ErrNotExist) {
-			slog.Warn("GPX-Ordner nicht lesbar", "fehler", err)
+			slog.Warn("GPX directory not readable", "error", err)
 		}
 		return nil
 	}
@@ -105,13 +105,13 @@ func (s *server) loadTracks() []*gpx.Track {
 func parseGPXFile(e files.Entry, opt gpx.Options) []*gpx.Track {
 	f, err := os.Open(e.Path)
 	if err != nil {
-		slog.Warn("GPX-Datei nicht lesbar", "datei", e.Rel, "fehler", err)
+		slog.Warn("GPX file not readable", "file", e.Rel, "error", err)
 		return nil
 	}
 	defer f.Close()
 	ts, err := gpx.Parse(f, e.Rel, opt)
 	if err != nil {
-		slog.Warn("GPX-Datei ungültig", "datei", e.Rel, "fehler", err)
+		slog.Warn("Invalid GPX file", "file", e.Rel, "error", err)
 		return nil
 	}
 	return ts
@@ -141,7 +141,7 @@ type trackJSON struct {
 	Segments  []segJSON `json:"segments"`
 }
 
-// segJSON gibt ein Segment als [[lat,lon],...] mit 5 Nachkommastellen (~1 m) aus.
+// segJSON outputs a segment as [[lat,lon],...] with 5 decimal places (~1 m).
 type segJSON []int32
 
 func (s segJSON) MarshalJSON() ([]byte, error) {
@@ -164,7 +164,7 @@ func (s *server) handleData(w http.ResponseWriter, r *http.Request) {
 	tracks := s.loadTracks()
 	photos, err := s.photos.Load()
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		slog.Warn("Foto-Ordner nicht lesbar", "fehler", err)
+		slog.Warn("Photo directory not readable", "error", err)
 	}
 
 	out := struct {
@@ -214,7 +214,7 @@ func (s *server) handleData(w http.ResponseWriter, r *http.Request) {
 		}
 		out.Tracks = append(out.Tracks, j)
 	}
-	// Neueste Tracks zuerst, Tracks ohne Zeitstempel ans Ende
+	// newest tracks first, tracks without timestamps last
 	sortTracks(out.Tracks)
 
 	w.Header().Set("Cache-Control", "no-store")
@@ -249,9 +249,9 @@ func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, r, map[string]any{"ok": true, "version": version})
 }
 
-// handleStats zeigt den Speicherverbrauch – praktisch zum Einschätzen des RAM-Bedarfs.
+// handleStats reports memory usage – handy for estimating RAM requirements.
 func (s *server) handleStats(w http.ResponseWriter, r *http.Request) {
-	runtime.GC() // damit heap_mb den tatsächlich belegten Speicher zeigt
+	runtime.GC() // so that heap_mb shows the memory actually in use
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
 	thumbs, thumbBytes := s.thumbs.Stats()
@@ -272,7 +272,7 @@ func (s *server) handleStats(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ---------------------------------------------------------------- Dateien
+// ---------------------------------------------------------------- Files
 
 func (s *server) handleThumb(w http.ResponseWriter, r *http.Request) {
 	f, info, err := files.Open(s.cfg.PhotoDir, r.URL.Query().Get("path"), photo.Extensions)
@@ -293,8 +293,8 @@ func (s *server) handleThumb(w http.ResponseWriter, r *http.Request) {
 	data, err := s.thumbs.Thumbnail(r.Context(), f, info)
 	if err != nil {
 		if r.Context().Err() == nil {
-			slog.Warn("Vorschaubild fehlgeschlagen", "datei", r.URL.Query().Get("path"), "fehler", err)
-			http.Error(w, "Vorschaubild konnte nicht erstellt werden", http.StatusInternalServerError)
+			slog.Warn("Thumbnail failed", "file", r.URL.Query().Get("path"), "error", err)
+			http.Error(w, "could not create thumbnail", http.StatusInternalServerError)
 		}
 		return
 	}
@@ -343,7 +343,7 @@ func setAttachment(w http.ResponseWriter, name string) {
 		`attachment; filename="`+ascii+`"; filename*=UTF-8''`+url.PathEscape(name))
 }
 
-// ---------------------------------------------------------------- Hilfen
+// ---------------------------------------------------------------- Helpers
 
 func writeJSON(w http.ResponseWriter, r *http.Request, v any) {
 	var buf bytes.Buffer
@@ -353,7 +353,7 @@ func writeJSON(w http.ResponseWriter, r *http.Request, v any) {
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Add("Vary", "Accept-Encoding")
-	// Tracks komprimieren sehr gut (~5×)
+	// tracks compress very well (~5×)
 	if buf.Len() > 1024 && strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 		w.Header().Set("Content-Encoding", "gzip")
 		gz, _ := gzip.NewWriterLevel(w, gzip.BestSpeed)

@@ -1,23 +1,23 @@
 services:
   gpx-cartographer:
     build: .
-    # Sobald ein Release veröffentlicht ist, stattdessen das fertige Image nehmen.
-    # ":0.1" bekommt alle Bugfixes von v0.1.x, aber keine neuen Minor-Versionen.
+    # Once a release is published, use the prebuilt image instead.
+    # ":0.1" gets all bug fixes from v0.1.x, but no new minor versions.
     # image: ghcr.io/noelr0/gpx-cartographer:0.1
     container_name: gpx-cartographer
     restart: unless-stopped
     ports:
       - "8080:8080"
     environment:
-      # Zeitzone der Handy-Kamera, falls Fotos keinen EXIF-Zeitzonen-Offset haben
+      # Time zone of the phone camera, in case photos have no EXIF time zone offset
       CAMERA_TZ: Europe/Zurich
-      # Fotos ohne GPS über die Zeitstempel der GPX-Tracks verorten
+      # Locate photos without GPS using the timestamps of the GPX tracks
       MATCH_PHOTOS_TO_TRACKS: "true"
       MATCH_MAX_GAP: "300"
     volumes:
-      # Linke Seite: deine Ordner auf dem Server
+      # Left side: your directories on the host
       - /path/to/photos:/data/photos:ro
       - /path/to/gpx:/data/gpx:ro
-    # Läuft standardmässig als "nobody" (65534). Falls die Dateien nicht lesbar
-    # sind, UID:GID des Syncthing-Benutzers eintragen:
+    # Runs as "nobody" (65534) by default. If the files are not readable,
+    # set the UID:GID of the Syncthing user:
     # user: "1000:1000"

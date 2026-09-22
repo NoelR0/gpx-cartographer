@@ -14,8 +14,8 @@
     if (!iso) return "";
     const d = new Date(iso);
     return withTime
-      ? d.toLocaleString("de-CH", { dateStyle: "medium", timeStyle: "short" })
-      : d.toLocaleDateString("de-CH", { dateStyle: "medium" });
+      ? d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+      : d.toLocaleDateString(undefined, { dateStyle: "medium" });
   };
   const fmtKm = (m) => (m >= 10000 ? (m / 1000).toFixed(0) : (m / 1000).toFixed(1)) + " km";
   const fmtDuration = (s) => {
@@ -26,8 +26,8 @@
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-  // ---------- Karte ----------
-  // maxZoom muss gesetzt sein, bevor die Foto-Ebene (markercluster) hinzugefügt wird
+  // ---------- Map ----------
+  // maxZoom must be set before the photo layer (markercluster) is added
   const map = L.map("map", { zoomControl: false, maxZoom: 19 }).setView([46.8, 8.2], 8);
   L.control.zoom({ position: "topright" }).addTo(map);
   L.control.scale({ imperial: false, position: "bottomright" }).addTo(map);
@@ -39,7 +39,7 @@
     zoomToBoundsOnClick: false,
     iconCreateFunction: (cluster) => {
       const markers = cluster.getAllChildMarkers();
-      // Neuestes Foto als Titelbild des Stapels
+      // newest photo as the cover of the stack
       const cover = markers.reduce((a, b) => (ts(b.photo) > ts(a.photo) ? b : a));
       return L.divIcon({
         className: "photo-cluster",
@@ -56,14 +56,14 @@
     const photos = cluster.getAllChildMarkers().map((m) => m.photo);
     const bounds = cluster.getBounds();
     const canZoom = map.getBoundsZoom(bounds) > map.getZoom() && map.getZoom() < map.getMaxZoom();
-    // Liegen alle Fotos (fast) am selben Ort, bringt Zoomen nichts -> direkt ansehen
+    // if all photos are at (almost) the same spot, zooming won't help -> open them directly
     const tiny = bounds.getNorthEast().distanceTo(bounds.getSouthWest()) < 15;
     if (!canZoom || tiny) openLightbox(sortByTime(photos), 0);
     else map.fitBounds(bounds, { padding: [40, 40] });
   });
 
-  // ---------- Zustand ----------
-  let photos = [];        // alle Fotos mit Position
+  // ---------- State ----------
+  let photos = [];        // all photos with a position
   let unlocated = 0;
   let tracks = [];        // {data, line, color, li}
   let activeTrack = null;
@@ -71,7 +71,7 @@
   const ts = (p) => (p.taken ? Date.parse(p.taken) : 0);
   const sortByTime = (list) => [...list].sort((a, b) => ts(a) - ts(b));
 
-  // ---------- Daten laden ----------
+  // ---------- Loading data ----------
   async function loadConfig() {
     try {
       const cfg = await fetch("api/config").then((r) => r.json());
@@ -79,7 +79,7 @@
       map.setMaxZoom(cfg.tile_max_zoom);
       L.tileLayer(cfg.tile_url, { maxZoom: cfg.tile_max_zoom, attribution: cfg.tile_attribution }).addTo(map);
     } catch (err) {
-      $("status").innerHTML = `<span class="warn">Konfiguration nicht ladbar: ${esc(err.message)}</span>`;
+      $("status").innerHTML = `<span class="warn">Could not load configuration: ${esc(err.message)}</span>`;
     }
   }
 
@@ -92,14 +92,14 @@
       render(await res.json(), fit);
     } catch (err) {
       console.error(err);
-      $("status").innerHTML = `<span class="warn">Fehler beim Laden: ${esc(err.message)}</span>`;
+      $("status").innerHTML = `<span class="warn">Error while loading: ${esc(err.message)}</span>`;
     } finally {
       btn.classList.remove("spinning");
     }
   }
 
   function render(data, fit) {
-    // Fotos
+    // Photos
     photoLayer.clearLayers();
     photos = data.photos.filter((p) => p.lat != null && p.lon != null);
     unlocated = data.photos.length - photos.length;
@@ -124,12 +124,12 @@
     $("count-photos").textContent = photos.length;
     $("count-tracks").textContent = tracks.length;
     const notes = [];
-    if (!data.dirs.photos) notes.push('<span class="warn">Foto-Ordner nicht gefunden</span>');
-    if (!data.dirs.gpx) notes.push('<span class="warn">GPX-Ordner nicht gefunden</span>');
+    if (!data.dirs.photos) notes.push('<span class="warn">Photo directory not found</span>');
+    if (!data.dirs.gpx) notes.push('<span class="warn">GPX directory not found</span>');
     const fromTrack = photos.filter((p) => p.located_by === "track").length;
-    if (fromTrack) notes.push(`${fromTrack} Foto(s) über GPX-Zeitstempel verortet`);
-    if (unlocated) notes.push(`${unlocated} Foto(s) ohne Position`);
-    $("status").innerHTML = notes.join("<br>") || `Stand ${new Date().toLocaleTimeString("de-CH")}`;
+    if (fromTrack) notes.push(`${fromTrack} photo(s) located via GPX timestamps`);
+    if (unlocated) notes.push(`${unlocated} photo(s) without a position`);
+    $("status").innerHTML = notes.join("<br>") || `Updated ${new Date().toLocaleTimeString()}`;
 
     if (fit) fitAll();
   }
@@ -156,7 +156,7 @@
     const ul = $("track-list");
     ul.innerHTML = "";
     if (!tracks.length) {
-      ul.innerHTML = '<li class="empty">Keine GPX-Tracks gefunden.</li>';
+      ul.innerHTML = '<li class="empty">No GPX tracks found.</li>';
       return;
     }
     for (const entry of tracks) {
@@ -207,8 +207,8 @@
     const div = document.createElement("div");
     div.className = "track-popup";
     div.innerHTML = `<h3>${esc(t.name)}</h3><div class="stats">${stats}</div><div class="actions">` +
-      (inTrack.length ? `<a data-act="photos">${inTrack.length} Foto(s) ansehen</a>` : "") +
-      `<a href="api/track/download?file=${encodeURIComponent(t.file)}" download>GPX laden</a></div>`;
+      (inTrack.length ? `<a data-act="photos">View ${inTrack.length} photo(s)</a>` : "") +
+      `<a href="api/track/download?file=${encodeURIComponent(t.file)}" download>Download GPX</a></div>`;
     div.querySelector('[data-act="photos"]')?.addEventListener("click", () => openLightbox(inTrack, 0));
     const pos = latlng || entry.line.getBounds().getCenter();
     L.popup({ maxWidth: 260 }).setLatLng(pos).setContent(div).openOn(map);
@@ -255,15 +255,15 @@
     lb.index = i;
     const p = lb.list[i];
     const img = $("lb-img");
-    img.src = thumbUrl(p);       // sofort etwas zeigen …
-    const full = new Image();    // … und das grosse Bild nachladen
+    img.src = thumbUrl(p);       // show something right away …
+    const full = new Image();    // … then load the large image
     full.onload = () => { if (lb.list[lb.index] === p) img.src = full.src; };
     full.src = fullUrl(p);
     img.alt = p.name;
 
     $("lb-title").textContent = p.name;
     const meta = [fmtDate(p.taken), `${i + 1} / ${lb.list.length}`];
-    if (p.located_by === "track") meta.push("Position aus GPX-Track");
+    if (p.located_by === "track") meta.push("Position from GPX track");
     $("lb-meta").textContent = meta.filter(Boolean).join(" · ");
     $("lb-download").href = originalUrl(p);
     $("lb-prev").disabled = i === 0;
@@ -276,7 +276,7 @@
       cur.classList.add("current");
       cur.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
     }
-    // Nachbarn vorladen
+    // preload neighbors
     [i - 1, i + 1].forEach((j) => { if (lb.list[j]) new Image().src = fullUrl(lb.list[j]); });
   }
 
@@ -307,7 +307,7 @@
     else if (e.key === "ArrowLeft") showPhoto(lb.index - 1);
     else if (e.key === "ArrowRight") showPhoto(lb.index + 1);
   });
-  // Wischen auf Touch-Geräten
+  // swiping on touch devices
   let touchX = null;
   $("lb-img").addEventListener("touchstart", (e) => { touchX = e.touches[0].clientX; }, { passive: true });
   $("lb-img").addEventListener("touchend", (e) => {
@@ -317,7 +317,7 @@
     if (Math.abs(dx) > 50) showPhoto(lb.index + (dx < 0 ? 1 : -1));
   });
 
-  // ---------- Seitenleiste ----------
+  // ---------- Sidebar ----------
   $("show-photos").addEventListener("change", (e) =>
     e.target.checked ? map.addLayer(photoLayer) : map.removeLayer(photoLayer));
   $("show-tracks").addEventListener("change", (e) =>

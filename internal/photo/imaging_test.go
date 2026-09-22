@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-// quadrants erzeugt ein w×h-Bild mit vier farbigen Vierteln:
-// rot oben links, grün oben rechts, blau unten links, weiss unten rechts.
+// quadrants creates a w×h image with four colored quarters:
+// red top left, green top right, blue bottom left, white bottom right.
 func quadrants(w, h int) *image.RGBA {
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	for y := 0; y < h; y++ {
@@ -51,29 +51,29 @@ func corner(img *image.RGBA, right, bottom bool) string {
 }
 
 func TestOrient(t *testing.T) {
-	// Erwartete Ecken (oben links, oben rechts, unten links, unten rechts) nach
-	// der Korrektur, wenn das gespeicherte Bild RG/BW ist. Werte entsprechen
-	// Pillows ImageOps.exif_transpose.
+	// Expected corners (top left, top right, bottom left, bottom right) after
+	// correction when the stored image is RG/BW. Values match Pillow's
+	// ImageOps.exif_transpose.
 	want := map[int]string{
 		1: "RGBW",
-		2: "GRWB", // horizontal spiegeln
+		2: "GRWB", // flip horizontally
 		3: "WBGR", // 180°
-		4: "BWRG", // vertikal spiegeln
-		5: "RBGW", // transponieren
-		6: "BRWG", // 90° im Uhrzeigersinn
-		7: "WGBR", // transversal
-		8: "GWRB", // 90° gegen den Uhrzeigersinn
+		4: "BWRG", // flip vertically
+		5: "RBGW", // transpose
+		6: "BRWG", // 90° clockwise
+		7: "WGBR", // transverse
+		8: "GWRB", // 90° counterclockwise
 	}
 	src := quadrants(8, 4)
 	for o, exp := range want {
 		out := orient(src, o)
 		got := corner(out, false, false) + corner(out, true, false) + corner(out, false, true) + corner(out, true, true)
 		if got != exp {
-			t.Errorf("Ausrichtung %d: %s, erwartet %s", o, got, exp)
+			t.Errorf("orientation %d: %s, want %s", o, got, exp)
 		}
 		b := out.Bounds()
 		if o >= 5 && (b.Dx() != 4 || b.Dy() != 8) || o < 5 && (b.Dx() != 8 || b.Dy() != 4) {
-			t.Errorf("Ausrichtung %d: Grösse %v", o, b)
+			t.Errorf("orientation %d: size %v", o, b)
 		}
 	}
 }
@@ -81,12 +81,12 @@ func TestOrient(t *testing.T) {
 func TestDownscale(t *testing.T) {
 	out := downscale(quadrants(400, 300), 160)
 	if b := out.Bounds(); b.Dx() != 160 || b.Dy() != 120 {
-		t.Fatalf("Grösse %v", b)
+		t.Fatalf("size %v", b)
 	}
 	if got := corner(out, false, false) + corner(out, true, true); got != "RW" {
-		t.Errorf("Farben %s", got)
+		t.Errorf("colors %s", got)
 	}
-	// YCbCr (wie aus einem JPEG)
+	// YCbCr (as decoded from a JPEG)
 	ycc := image.NewYCbCr(image.Rect(0, 0, 300, 400), image.YCbCrSubsampleRatio420)
 	for i := range ycc.Y {
 		ycc.Y[i] = 200
@@ -96,30 +96,30 @@ func TestDownscale(t *testing.T) {
 	}
 	out = downscale(ycc, 160)
 	if b := out.Bounds(); b.Dx() != 120 || b.Dy() != 160 {
-		t.Fatalf("Grösse %v", b)
+		t.Fatalf("size %v", b)
 	}
 	if c := out.RGBAAt(60, 80); c.R != 200 || c.G != 200 || c.B != 200 {
-		t.Errorf("Farbe %v", c)
+		t.Errorf("color %v", c)
 	}
-	// Kleine Bilder bleiben unverändert gross
+	// small images keep their size
 	if b := downscale(quadrants(50, 20), 160).Bounds(); b.Dx() != 50 || b.Dy() != 20 {
-		t.Errorf("vergrössert: %v", b)
+		t.Errorf("enlarged: %v", b)
 	}
 }
 
 func TestCropToAspect(t *testing.T) {
-	// 4:3-Vorschaubild für ein 16:9-Foto -> Balken oben/unten entfernen
+	// 4:3 thumbnail for a 16:9 photo -> remove bars at top/bottom
 	thumb := image.NewRGBA(image.Rect(0, 0, 160, 120))
 	b := cropToAspect(thumb, 1920, 1080).Bounds()
 	if b.Dx() != 160 || b.Dy() != 90 || b.Min.Y != 15 {
 		t.Errorf("16:9: %v", b)
 	}
-	// Hochformat-Foto in Querformat-Vorschau -> links/rechts entfernen
+	// portrait photo in landscape thumbnail -> remove left/right
 	b = cropToAspect(thumb, 1080, 1440).Bounds()
 	if b.Dx() != 90 || b.Dy() != 120 {
 		t.Errorf("3:4: %v", b)
 	}
-	// Passendes Seitenverhältnis bleibt
+	// matching aspect ratio is kept
 	if b = cropToAspect(thumb, 4000, 3000).Bounds(); b.Dx() != 160 || b.Dy() != 120 {
 		t.Errorf("4:3: %v", b)
 	}

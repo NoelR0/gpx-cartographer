@@ -9,13 +9,13 @@ COPY . .
 RUN go test ./... \
  && CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
     go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/gpx-cartographer . \
- # Lizenzen für das Image: eigene, Go-Standardbibliothek (in die Binary gelinkt), Frontend-Bibliotheken
+ # Licenses for the image: our own, Go standard library (linked into the binary), frontend libraries
  && mkdir -p /out/licenses \
  && cp LICENSE /out/licenses/LICENSE \
  && cp "$(go env GOROOT)/LICENSE" /out/licenses/LICENSE-go \
  && cp web/vendor/LICENSE-*.txt /out/licenses/
 
-# ---- Laufzeit: nur die statische Binary ----
+# ---- Runtime: only the static binary ----
 FROM scratch
 COPY --from=build /out/gpx-cartographer /gpx-cartographer
 COPY --from=build /out/licenses /licenses
@@ -23,8 +23,8 @@ COPY --from=build /out/licenses /licenses
 ENV PHOTO_DIR=/data/photos \
     GPX_DIR=/data/gpx \
     ADDR=:8080 \
-    # Weiche Speichergrenze: Go räumt früher auf, statt den Heap wachsen zu lassen.
-    # Bei sehr grossen Sammlungen erhöhen (siehe /api/stats -> heap_mb).
+    # Soft memory limit: Go collects garbage earlier instead of growing the heap.
+    # Increase for very large collections (see /api/stats -> heap_mb).
     GOMEMLIMIT=64MiB
 
 USER 65534:65534

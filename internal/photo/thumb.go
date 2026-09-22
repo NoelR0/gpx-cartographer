@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"image"
 	"image/jpeg"
-	_ "image/png" // PNG-Decoder registrieren
+	_ "image/png" // register PNG decoder
 	"io"
 	"os"
 	"sync"
@@ -15,14 +15,14 @@ import (
 	"github.com/NoelR0/gpx-cartographer/internal/exif"
 )
 
-// Thumbnailer erzeugt kleine JPEG-Vorschaubilder.
+// Thumbnailer creates small JPEG thumbnails.
 //
-// Um Speicherspitzen zu vermeiden:
-//   - wird bevorzugt das in der EXIF eingebettete Vorschaubild verwendet
-//     (wenige KB, das eigentliche Foto wird dann gar nicht dekodiert),
-//   - dürfen nur Workers Fotos gleichzeitig vollständig dekodiert werden
-//     (ein 12-MP-JPEG belegt dabei ~18 MB),
-//   - ist der Cache der fertigen Vorschaubilder in Bytes begrenzt.
+// To avoid memory spikes:
+//   - the thumbnail embedded in the EXIF data is preferred
+//     (a few KB; the actual photo is then not decoded at all),
+//   - at most Workers photos may be fully decoded at the same time
+//     (a 12 MP JPEG takes ~18 MB while doing so),
+//   - the cache of finished thumbnails is limited in bytes.
 type Thumbnailer struct {
 	Size int
 	sem  chan struct{}
@@ -49,7 +49,7 @@ func NewThumbnailer(size, workers, cacheBytes int) *Thumbnailer {
 	}
 }
 
-// Thumbnail liefert das Vorschaubild für die bereits geöffnete Datei f.
+// Thumbnail returns the thumbnail for the already opened file f.
 func (t *Thumbnailer) Thumbnail(ctx context.Context, f *os.File, info os.FileInfo) ([]byte, error) {
 	key := fmt.Sprintf("%s|%d|%d", f.Name(), info.ModTime().UnixNano(), info.Size())
 	if data, ok := t.get(key); ok {
@@ -69,7 +69,7 @@ func (t *Thumbnailer) render(ctx context.Context, f *os.File) ([]byte, error) {
 		return nil, err
 	}
 
-	// 1. Versuch: eingebettetes Vorschaubild, wenn es gross genug ist.
+	// 1st attempt: embedded thumbnail, if it is large enough.
 	if len(m.Thumbnail) > 0 {
 		if img, err := jpeg.Decode(bytes.NewReader(m.Thumbnail)); err == nil {
 			b := img.Bounds()
@@ -80,11 +80,11 @@ func (t *Thumbnailer) render(ctx context.Context, f *os.File) ([]byte, error) {
 		}
 	}
 
-	// 2. Versuch: ganzes Foto dekodieren – nur begrenzt viele gleichzeitig.
+	// 2nd attempt: decode the whole photo – only a limited number at a time.
 	select {
 	case t.sem <- struct{}{}:
 	case <-ctx.Done():
-		return nil, ctx.Err() // Browser hat die Anfrage abgebrochen (weggescrollt)
+		return nil, ctx.Err() // browser canceled the request (scrolled away)
 	}
 	defer func() { <-t.sem }()
 
@@ -136,7 +136,7 @@ func (t *Thumbnailer) put(key string, data []byte) {
 	}
 }
 
-// Stats liefert Anzahl und Grösse der gecachten Vorschaubilder.
+// Stats returns the count and size of the cached thumbnails.
 func (t *Thumbnailer) Stats() (count, bytes int) {
 	t.mu.Lock()
 	defer t.mu.Unlock()

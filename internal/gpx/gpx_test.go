@@ -8,13 +8,13 @@ import (
 	"time"
 )
 
-// straightTrack erzeugt n Punkte auf einer Linie nach Norden, einer pro Sekunde.
+// straightTrack creates n points on a line heading north, one per second.
 func straightTrack(n int, start time.Time) string {
 	var b strings.Builder
 	b.WriteString(`<?xml version="1.0"?><gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">`)
-	b.WriteString(`<trk><name> Testlauf </name><trkseg>`)
+	b.WriteString(`<trk><name> Test run </name><trkseg>`)
 	for i := 0; i < n; i++ {
-		fmt.Fprintf(&b, `<trkpt lat="%.7f" lon="8.5"><ele>%d</ele><time>%s</time><name>pkt</name></trkpt>`,
+		fmt.Fprintf(&b, `<trkpt lat="%.7f" lon="8.5"><ele>%d</ele><time>%s</time><name>pt</name></trkpt>`,
 			47.0+float64(i)*0.0001, 400+i, start.Add(time.Duration(i)*time.Second).Format(time.RFC3339))
 	}
 	b.WriteString(`</trkseg></trk></gpx>`)
@@ -23,7 +23,7 @@ func straightTrack(n int, start time.Time) string {
 
 func parse(t *testing.T, s string, opt Options) []*Track {
 	t.Helper()
-	ts, err := Parse(strings.NewReader(s), "ordner/test.gpx", opt)
+	ts, err := Parse(strings.NewReader(s), "folder/test.gpx", opt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,30 +34,30 @@ func TestParseTrack(t *testing.T) {
 	start := time.Date(2026, 8, 15, 8, 0, 0, 0, time.UTC)
 	ts := parse(t, straightTrack(101, start), Options{SimplifyM: 3})
 	if len(ts) != 1 {
-		t.Fatalf("%d Tracks", len(ts))
+		t.Fatalf("%d tracks", len(ts))
 	}
 	tr := ts[0]
-	if tr.Name != "Testlauf" || tr.ID != "ordner/test.gpx#0" || tr.File != "ordner/test.gpx" {
-		t.Errorf("Name/ID: %q %q %q (Punkt-<name> darf den Tracknamen nicht überschreiben)", tr.Name, tr.ID, tr.File)
+	if tr.Name != "Test run" || tr.ID != "folder/test.gpx#0" || tr.File != "folder/test.gpx" {
+		t.Errorf("name/ID: %q %q %q (a point <name> must not override the track name)", tr.Name, tr.ID, tr.File)
 	}
-	// 100 × 0.0001° Breite ≈ 1112 m
+	// 100 × 0.0001° latitude ≈ 1112 m
 	if math.Abs(tr.DistanceM-1112) > 5 {
-		t.Errorf("Distanz = %.0f", tr.DistanceM)
+		t.Errorf("distance = %.0f", tr.DistanceM)
 	}
 	if math.Abs(tr.AscentM-100) > 5 || tr.DescentM != 0 {
-		t.Errorf("Höhenmeter = %.0f / %.0f", tr.AscentM, tr.DescentM)
+		t.Errorf("ascent/descent = %.0f / %.0f", tr.AscentM, tr.DescentM)
 	}
 	if !tr.Start.Equal(start) || !tr.End.Equal(start.Add(100*time.Second)) {
-		t.Errorf("Zeit = %v – %v", tr.Start, tr.End)
+		t.Errorf("time = %v – %v", tr.Start, tr.End)
 	}
-	// Eine gerade Linie wird auf Anfangs- und Endpunkt reduziert …
+	// A straight line is reduced to its start and end points …
 	if d, timed := tr.PointCount(); d != 2 || timed != 101 {
-		t.Errorf("Punkte: Karte %d (erwartet 2), Zeitindex %d (erwartet 101)", d, timed)
+		t.Errorf("points: map %d (want 2), time index %d (want 101)", d, timed)
 	}
 }
 
 func TestSimplifyKeepsCorners(t *testing.T) {
-	// L-Form: 50 Punkte nach Norden, dann 50 nach Osten
+	// L shape: 50 points north, then 50 east
 	var b strings.Builder
 	b.WriteString(`<gpx><trk><trkseg>`)
 	for i := 0; i < 50; i++ {
@@ -69,18 +69,18 @@ func TestSimplifyKeepsCorners(t *testing.T) {
 	b.WriteString(`</trkseg></trk></gpx>`)
 	tr := parse(t, b.String(), Options{SimplifyM: 3})[0]
 	if d, _ := tr.PointCount(); d != 3 {
-		t.Errorf("L-Form: %d Punkte, erwartet 3", d)
+		t.Errorf("L shape: %d points, want 3", d)
 	}
 	tr = parse(t, b.String(), Options{SimplifyM: 0})[0]
 	if d, _ := tr.PointCount(); d != 100 {
-		t.Errorf("ohne Vereinfachung: %d Punkte, erwartet 100", d)
+		t.Errorf("without simplification: %d points, want 100", d)
 	}
 }
 
 func TestRoutesSegmentsAndNames(t *testing.T) {
 	src := `<gpx>
 	  <rte><rtept lat="46.5" lon="7.9"/><rtept lat="46.6" lon="7.9"/></rte>
-	  <trk><name>Zwei Teile</name>
+	  <trk><name>Two parts</name>
 	    <trkseg><trkpt lat="1" lon="1"/><trkpt lat="1.001" lon="1"/></trkseg>
 	    <trkseg><trkpt lat="2" lon="2"/></trkseg>
 	    <trkseg></trkseg>
@@ -89,20 +89,20 @@ func TestRoutesSegmentsAndNames(t *testing.T) {
 	</gpx>`
 	ts := parse(t, src, Options{})
 	if len(ts) != 2 {
-		t.Fatalf("%d Tracks, erwartet 2 (leerer Track wird verworfen)", len(ts))
+		t.Fatalf("%d tracks, want 2 (empty track is discarded)", len(ts))
 	}
 	if ts[0].Name != "test" || !ts[0].Start.IsZero() {
-		t.Errorf("Route: Name %q (Dateiname erwartet), Start %v", ts[0].Name, ts[0].Start)
+		t.Errorf("route: name %q (want file name), start %v", ts[0].Name, ts[0].Start)
 	}
-	if ts[1].Name != "Zwei Teile" || len(ts[1].Segments) != 2 || ts[1].ID != "ordner/test.gpx#1" {
-		t.Errorf("Track: %q, %d Segmente, ID %q", ts[1].Name, len(ts[1].Segments), ts[1].ID)
+	if ts[1].Name != "Two parts" || len(ts[1].Segments) != 2 || ts[1].ID != "folder/test.gpx#1" {
+		t.Errorf("track: %q, %d segments, ID %q", ts[1].Name, len(ts[1].Segments), ts[1].ID)
 	}
 }
 
 func TestInvalid(t *testing.T) {
-	for _, s := range []string{"<gpx><trk>", "kein xml", "<kml></kml>"} {
+	for _, s := range []string{"<gpx><trk>", "not xml", "<kml></kml>"} {
 		if _, err := Parse(strings.NewReader(s), "x.gpx", Options{}); err == nil {
-			t.Errorf("%q: Fehler erwartet", s)
+			t.Errorf("%q: expected an error", s)
 		}
 	}
 }
@@ -125,31 +125,31 @@ func TestLocate(t *testing.T) {
 	ts := parse(t, src, Options{SimplifyM: 3})
 	gap := 5 * time.Minute
 
-	// Genau in der Mitte der ersten 100 s -> interpoliert
+	// exactly in the middle of the first 100 s -> interpolated
 	lat, lon, ok := Locate(ts, start.Add(50*time.Second), gap)
 	if !ok || math.Abs(lat-47.05) > 1e-6 || math.Abs(lon-8.1) > 1e-6 {
-		t.Errorf("Mitte: %v %v %v", lat, lon, ok)
+		t.Errorf("middle: %v %v %v", lat, lon, ok)
 	}
-	// Andere Zeitzone, gleicher Zeitpunkt
+	// different time zone, same instant
 	zurich := time.FixedZone("CEST", 2*3600)
 	if lat2, _, _ := Locate(ts, start.Add(50*time.Second).In(zurich), gap); lat2 != lat {
-		t.Error("Zeitzone darf keine Rolle spielen")
+		t.Error("the time zone must not matter")
 	}
-	// Grosse Lücke (28 min): 2 min nach dem zweiten Punkt -> nächster Punkt
+	// large gap (28 min): 2 min after the second point -> nearest point
 	lat, lon, ok = Locate(ts, start.Add(220*time.Second), gap)
 	if !ok || lat != 47.1 || lon != 8.2 {
-		t.Errorf("Lücke: %v %v %v", lat, lon, ok)
+		t.Errorf("gap: %v %v %v", lat, lon, ok)
 	}
-	// Mitten in der Lücke -> nichts
+	// in the middle of the gap -> nothing
 	if _, _, ok := Locate(ts, start.Add(15*time.Minute), gap); ok {
-		t.Error("in der Lücke darf nichts gefunden werden")
+		t.Error("nothing must be found inside the gap")
 	}
-	// Kurz vor dem Start / lange danach
+	// shortly before the start / long after the end
 	if _, _, ok := Locate(ts, start.Add(-time.Minute), gap); !ok {
-		t.Error("1 min vor Start sollte gefunden werden")
+		t.Error("1 min before the start should be found")
 	}
 	if _, _, ok := Locate(ts, start.Add(2*time.Hour), gap); ok {
-		t.Error("2 h nach Ende darf nichts gefunden werden")
+		t.Error("nothing must be found 2 h after the end")
 	}
 }
 
@@ -161,7 +161,7 @@ func TestUnsortedTimes(t *testing.T) {
 	</trkseg></trk></gpx>`
 	tr := parse(t, src, Options{})[0]
 	if tr.Start.Format("15:04") != "08:00" || tr.End.Format("15:04") != "08:02" {
-		t.Errorf("Start/Ende: %v %v", tr.Start, tr.End)
+		t.Errorf("start/end: %v %v", tr.Start, tr.End)
 	}
 	lat, _, ok := Locate([]*Track{tr}, time.Date(2026, 8, 15, 8, 0, 30, 0, time.UTC), time.Minute)
 	if !ok || math.Abs(lat-47.05) > 1e-6 {
