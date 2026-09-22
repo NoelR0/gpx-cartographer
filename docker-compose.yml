@@ -1,8 +1,9 @@
 services:
   gpx-cartographer:
     build: .
-    # Sobald das Image auf GitHub veröffentlicht ist, stattdessen z. B.:
-    # image: ghcr.io/noelr0/gpx-cartographer:1
+    # Sobald ein Release veröffentlicht ist, stattdessen das fertige Image nehmen.
+    # ":0.1" bekommt alle Bugfixes von v0.1.x, aber keine neuen Minor-Versionen.
+    # image: ghcr.io/noelr0/gpx-cartographer:0.1
     container_name: gpx-cartographer
     restart: unless-stopped
     ports:

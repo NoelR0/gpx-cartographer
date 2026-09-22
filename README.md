@@ -43,7 +43,24 @@ go install github.com/NoelR0/gpx-cartographer@latest
 
 ## Docker
 
-Point the two volumes in `docker-compose.yml` to your Syncthing folders, then run:
+Prebuilt images for amd64 and arm64 are published for every release:
+
+```yaml
+services:
+  gpx-cartographer:
+    image: ghcr.io/noelr0/gpx-cartographer:0.1   # or a full version such as 0.1.0, or latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - /path/to/photos:/data/photos:ro
+      - /path/to/gpx:/data/gpx:ro
+```
+
+Update with `docker compose pull && docker compose up -d`.
+
+To build the image yourself instead, point the two volumes in `docker-compose.yml` to your
+folders and run:
 
 ```sh
 docker compose up -d --build
@@ -121,7 +138,21 @@ go test ./...
 go run . -photos ./example/photos -gpx ./example/gpx
 ```
 
-The version number is set at build time: `go build -ldflags "-X main.version=1.2.3"`.
+The version number is set at build time: `go build -ldflags "-X main.version=v1.2.3"`.
+
+### Releases
+
+Releases are annotated git tags following [semantic versioning](https://semver.org)
+(`vMAJOR.MINOR.PATCH`). Pushing a tag builds and publishes the Docker image via GitHub Actions:
+
+```sh
+git log --oneline v0.1.0..HEAD          # changes since the last release
+git tag -a v0.2.0 -m "Short description"
+git push origin v0.2.0
+```
+
+The image is tagged `0.2.0`, `0.2` and `latest` (from v1 on additionally `1`).
+`go install …@latest` also resolves to the newest tag.
 
 ## License
 
