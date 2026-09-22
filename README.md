@@ -1,5 +1,13 @@
 # GPX Cartographer
 
+>[!CAUTION]
+>**Warning beforehand: mostly/fully vibe-coded.**
+>I was watching a video of Matthias random stuff
+>and he build an app for displaying his images on a map.
+>I found this concept cool and thought that one can expand it
+>for gpx tracks.
+>Enjoy!
+
 Shows your photos (based on their EXIF GPS data) and GPX tracks on an OpenStreetMap map.
 Both folders are re-scanned on every page load or when you click ⟳, which makes it a good fit
 for folders filled by Syncthing.
@@ -33,7 +41,7 @@ go build -o gpx-cartographer .
 ./gpx-cartographer -photos ~/Pictures/map -gpx ~/gpx
 ```
 
-→ http://localhost:8080
+→ <http://localhost:8080>
 
 Or install it directly (Go ≥ 1.24):
 
@@ -76,7 +84,7 @@ Environment variables (the first four are also available as the flags `-photos`,
 `-addr`, `-tz`):
 
 | Variable | Default | Description |
-|---|---|---|
+| --- | --- | --- |
 | `PHOTO_DIR` | `/data/photos` | Folder containing the photos |
 | `GPX_DIR` | `/data/gpx` | Folder containing the GPX files |
 | `ADDR` | `:8080` | Listen address and port (alternatively `PORT`) |
@@ -104,7 +112,7 @@ provider or your own tile server and adjust `TILE_ATTRIBUTION` accordingly.
 Measured with 2,000 photos and 100 tracks of 10,000 points each (1 million points, 93 MB of GPX):
 
 | | |
-|---|---|
+| --- | --- |
 | Idle | ~9 MB |
 | Data actually in use | ~16 MB |
 | Peak with `GOMEMLIMIT=64MiB` | ~66 MB |
@@ -161,7 +169,7 @@ GPX Cartographer is licensed under the [MIT License](LICENSE).
 ### Third-party software
 
 | Component | License | Notes |
-|---|---|---|
+| --- | --- | --- |
 | [Go](https://go.dev) standard library | BSD-3-Clause | linked into the binary, [license text](https://go.dev/LICENSE) |
 | [Leaflet](https://leafletjs.com) 1.9.4 | BSD-2-Clause | unmodified in `web/vendor/`, see `web/vendor/LICENSE-leaflet.txt` |
 | [Leaflet.markercluster](https://github.com/Leaflet/Leaflet.markercluster) 1.5.3 | MIT | unmodified in `web/vendor/`, see `web/vendor/LICENSE-leaflet.markercluster.txt` |
