@@ -17,10 +17,10 @@ import (
 	"strings"
 	"time"
 
-	"cartographer/internal/files"
-	"cartographer/internal/gpx"
-	"cartographer/internal/photo"
-	"cartographer/web"
+	"github.com/NoelR0/gpx-cartographer/internal/files"
+	"github.com/NoelR0/gpx-cartographer/internal/gpx"
+	"github.com/NoelR0/gpx-cartographer/internal/photo"
+	"github.com/NoelR0/gpx-cartographer/web"
 )
 
 var gpxExtensions = map[string]bool{".gpx": true}

@@ -75,7 +75,7 @@
   async function loadConfig() {
     try {
       const cfg = await fetch("api/config").then((r) => r.json());
-      $("version").textContent = `Cartographer ${cfg.version}`;
+      $("version").textContent = `GPX Cartographer ${cfg.version}`;
       map.setMaxZoom(cfg.tile_max_zoom);
       L.tileLayer(cfg.tile_url, { maxZoom: cfg.tile_max_zoom, attribution: cfg.tile_attribution }).addTo(map);
     } catch (err) {

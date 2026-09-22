@@ -1,4 +1,4 @@
-// Cartographer zeigt Fotos und GPX-Tracks auf einer OpenStreetMap-Karte.
+// GPX Cartographer zeigt Fotos und GPX-Tracks auf einer OpenStreetMap-Karte.
 package main
 
 import (
@@ -36,7 +36,7 @@ func main() {
 		os.Exit(healthcheck(cfg.Addr))
 	}
 
-	slog.Info("Cartographer startet", "version", version, "adresse", cfg.Addr)
+	slog.Info("GPX Cartographer startet", "version", version, "adresse", cfg.Addr)
 	logDir("Foto-Ordner", cfg.PhotoDir)
 	logDir("GPX-Ordner", cfg.GPXDir)
 

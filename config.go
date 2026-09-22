@@ -100,7 +100,7 @@ func loadConfig(args []string) (*Config, error) {
 	}
 	tzName := envStr("CAMERA_TZ", envStr("TZ", "Europe/Zurich"))
 
-	fs := flag.NewFlagSet("cartographer", flag.ContinueOnError)
+	fs := flag.NewFlagSet("gpx-cartographer", flag.ContinueOnError)
 	fs.StringVar(&c.PhotoDir, "photos", c.PhotoDir, "Foto-Ordner (PHOTO_DIR)")
 	fs.StringVar(&c.GPXDir, "gpx", c.GPXDir, "GPX-Ordner (GPX_DIR)")
 	fs.StringVar(&c.Addr, "addr", c.Addr, "Adresse, auf der der Server lauscht (ADDR)")

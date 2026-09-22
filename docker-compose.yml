@@ -1,9 +1,9 @@
 services:
-  cartographer:
+  gpx-cartographer:
     build: .
     # Sobald das Image auf GitHub veröffentlicht ist, stattdessen z. B.:
-    # image: ghcr.io/<github-name>/cartographer:1
-    container_name: cartographer
+    # image: ghcr.io/noelr0/gpx-cartographer:1
+    container_name: gpx-cartographer
     restart: unless-stopped
     ports:
       - "8080:8080"
@@ -14,9 +14,9 @@ services:
       MATCH_PHOTOS_TO_TRACKS: "true"
       MATCH_MAX_GAP: "300"
     volumes:
-      # Linke Seite: deine Syncthing-Ordner auf dem Server
-      - /srv/syncthing/Karten-Album:/data/photos:ro
-      - /srv/syncthing/GPX:/data/gpx:ro
+      # Linke Seite: deine Ordner auf dem Server
+      - /path/to/photos:/data/photos:ro
+      - /path/to/gpx:/data/gpx:ro
     # Läuft standardmässig als "nobody" (65534). Falls die Dateien nicht lesbar
     # sind, UID:GID des Syncthing-Benutzers eintragen:
     # user: "1000:1000"

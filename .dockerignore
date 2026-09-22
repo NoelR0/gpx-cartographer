@@ -1,4 +1,4 @@
 .git
-cartographer
+gpx-cartographer
 *.test
 docker-compose.yml

@@ -1,4 +1,4 @@
-// Package exif liest die für Cartographer relevanten Metadaten aus JPEG- und
+// Package exif liest die für GPX Cartographer relevanten Metadaten aus JPEG- und
 // PNG-Dateien: Bildgrösse, Ausrichtung, GPS-Position, Aufnahmezeit und das
 // eingebettete Vorschaubild. Es wird nur der Dateikopf gelesen, nie die
 // eigentlichen Bilddaten.

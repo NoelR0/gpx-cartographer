@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"cartographer/internal/exif"
-	"cartographer/internal/files"
+	"github.com/NoelR0/gpx-cartographer/internal/exif"
+	"github.com/NoelR0/gpx-cartographer/internal/files"
 )
 
 // Extensions sind die unterstützten Dateiendungen.

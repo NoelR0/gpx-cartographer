@@ -12,7 +12,7 @@ import (
 	"os"
 	"sync"
 
-	"cartographer/internal/exif"
+	"github.com/NoelR0/gpx-cartographer/internal/exif"
 )
 
 // Thumbnailer erzeugt kleine JPEG-Vorschaubilder.
