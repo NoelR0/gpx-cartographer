@@ -48,16 +48,23 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	go func() {
-		<-ctx.Done()
-		shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = srv.Shutdown(shutdown)
-	}()
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- srv.ListenAndServe() }()
 
-	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	select {
+	case err := <-serveErr: // e.g. port already in use
 		slog.Error("Server stopped", "error", err)
 		os.Exit(1)
+	case <-ctx.Done():
+	}
+
+	// ListenAndServe returns as soon as Shutdown is called; main has to wait
+	// for Shutdown itself so that running requests can finish.
+	slog.Info("Shutting down")
+	shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(shutdown); err != nil {
+		slog.Warn("Requests aborted during shutdown", "error", err)
 	}
 }
 

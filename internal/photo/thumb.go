@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"container/list"
 	"context"
+	"errors"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -22,6 +23,7 @@ import (
 //     (a few KB; the actual photo is then not decoded at all),
 //   - at most Workers photos may be fully decoded at the same time
 //     (a 12 MP JPEG takes ~18 MB while doing so),
+//   - images larger than maxPixels are rejected instead of decoded,
 //   - the cache of finished thumbnails is limited in bytes.
 type Thumbnailer struct {
 	Size int
@@ -33,6 +35,15 @@ type Thumbnailer struct {
 	bytes    int
 	maxBytes int
 }
+
+// maxPixels limits the images that are decoded. Decoding needs about 4 bytes
+// per pixel (50 MP ≈ 200 MB); larger files are rejected so that a single
+// huge PNG cannot exhaust the memory.
+const maxPixels = 50_000_000
+
+var errTooLarge = errors.New("image too large to create a thumbnail")
+
+func tooLarge(w, h int) bool { return int64(w)*int64(h) > maxPixels }
 
 type thumbItem struct {
 	key  string
@@ -70,7 +81,8 @@ func (t *Thumbnailer) render(ctx context.Context, f *os.File) ([]byte, error) {
 	}
 
 	// 1st attempt: embedded thumbnail, if it is large enough.
-	if len(m.Thumbnail) > 0 {
+	// The size is checked first: even a few KB of JPEG may claim huge dimensions.
+	if cfg, err := jpeg.DecodeConfig(bytes.NewReader(m.Thumbnail)); err == nil && !tooLarge(cfg.Width, cfg.Height) {
 		if img, err := jpeg.Decode(bytes.NewReader(m.Thumbnail)); err == nil {
 			b := img.Bounds()
 			if min(b.Dx(), b.Dy()) >= t.Size*6/10 {
@@ -81,6 +93,9 @@ func (t *Thumbnailer) render(ctx context.Context, f *os.File) ([]byte, error) {
 	}
 
 	// 2nd attempt: decode the whole photo – only a limited number at a time.
+	if tooLarge(m.Width, m.Height) {
+		return nil, fmt.Errorf("%w: %d×%d", errTooLarge, m.Width, m.Height)
+	}
 	select {
 	case t.sem <- struct{}{}:
 	case <-ctx.Done():

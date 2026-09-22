@@ -43,7 +43,7 @@ go build -o gpx-cartographer .
 
 → <http://localhost:8080>
 
-Or install it directly (Go ≥ 1.24):
+Or install it directly (Go ≥ 1.25):
 
 ```sh
 go install github.com/NoelR0/gpx-cartographer@latest

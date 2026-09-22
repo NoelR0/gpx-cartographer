@@ -63,7 +63,7 @@ func (l *Library) Load() ([]Photo, error) {
 	}
 
 	// Read new files in parallel – only the file header is read.
-	files.Parallel(len(todo), max(4, runtime.NumCPU()), func(k int) {
+	files.Parallel(len(todo), max(4, runtime.GOMAXPROCS(0)), func(k int) {
 		e := entries[todo[k]]
 		p, err := l.read(e)
 		if err != nil {

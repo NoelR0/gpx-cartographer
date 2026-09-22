@@ -1,10 +1,10 @@
 package main
 
 import (
-	"bytes"
 	"compress/gzip"
 	"encoding/json"
 	"errors"
+	"io"
 	"io/fs"
 	"log/slog"
 	"math"
@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/NoelR0/gpx-cartographer/internal/files"
@@ -89,7 +90,7 @@ func (s *server) loadTracks() []*gpx.Track {
 			todo = append(todo, i)
 		}
 	}
-	files.Parallel(len(todo), runtime.NumCPU(), func(k int) {
+	files.Parallel(len(todo), runtime.GOMAXPROCS(0), func(k int) {
 		e := entries[todo[k]]
 		ts := parseGPXFile(e, opt)
 		s.tracks.Put(e, ts)
@@ -282,7 +283,10 @@ func (s *server) handleThumb(w http.ResponseWriter, r *http.Request) {
 	}
 	defer f.Close()
 
-	etag := `"` + strconv.FormatInt(info.ModTime().UnixNano(), 36) + "-" + strconv.FormatInt(info.Size(), 36) + `"`
+	// The thumbnail depends not only on the file, but also on the configured
+	// size and on the code that renders it (version).
+	etag := `"` + strconv.FormatInt(info.ModTime().UnixNano(), 36) + "-" + strconv.FormatInt(info.Size(), 36) +
+		"-" + strconv.Itoa(s.cfg.ThumbSize) + "-" + version + `"`
 	w.Header().Set("ETag", etag)
 	w.Header().Set("Cache-Control", "private, max-age=86400")
 	if r.Header.Get("If-None-Match") == etag {
@@ -345,23 +349,33 @@ func setAttachment(w http.ResponseWriter, name string) {
 
 // ---------------------------------------------------------------- Helpers
 
+// gzip writers are reused: each one allocates several hundred KB.
+var gzipPool = sync.Pool{New: func() any {
+	gz, _ := gzip.NewWriterLevel(nil, gzip.BestSpeed)
+	return gz
+}}
+
+// writeJSON encodes v directly into the response (gzip-compressed if the
+// client accepts it), so no extra copy of large responses is kept in memory.
 func writeJSON(w http.ResponseWriter, r *http.Request, v any) {
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(v); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Add("Vary", "Accept-Encoding")
+	var out io.Writer = w
 	// tracks compress very well (~5×)
-	if buf.Len() > 1024 && strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 		w.Header().Set("Content-Encoding", "gzip")
-		gz, _ := gzip.NewWriterLevel(w, gzip.BestSpeed)
-		_, _ = buf.WriteTo(gz)
-		_ = gz.Close()
-		return
+		gz := gzipPool.Get().(*gzip.Writer)
+		gz.Reset(w)
+		defer func() {
+			_ = gz.Close()
+			gzipPool.Put(gz)
+		}()
+		out = gz
 	}
-	_, _ = buf.WriteTo(w)
+	// The status line has already been sent, so errors can only be logged.
+	if err := json.NewEncoder(out).Encode(v); err != nil && r.Context().Err() == nil {
+		slog.Warn("Writing JSON response failed", "path", r.URL.Path, "error", err)
+	}
 }
 
 func isDir(p string) bool {
