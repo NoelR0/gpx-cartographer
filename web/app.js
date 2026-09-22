@@ -4,6 +4,8 @@
   const TRACK_COLORS = ["#e6194b", "#3cb44b", "#4363d8", "#f58231", "#911eb4",
     "#008080", "#f032e6", "#9a6324", "#800000", "#000075", "#808000", "#46a0e6"];
   const MARKER_SIZE = 52;
+  // tracks within this many pixels of a click count as "under the cursor"
+  const TRACK_HIT_PX = window.matchMedia("(pointer: coarse)").matches ? 14 : 8;
 
   const $ = (id) => document.getElementById(id);
   const thumbUrl = (p) => `api/photo/thumb?path=${encodeURIComponent(p.id)}`;
@@ -112,7 +114,7 @@
       const color = TRACK_COLORS[i % TRACK_COLORS.length];
       const line = L.polyline(t.segments, { color, weight: 4, opacity: 0.85 });
       const entry = { data: t, line, color, li: null };
-      line.on("click", (e) => { L.DomEvent.stopPropagation(e); selectTrack(entry, false, e.latlng); });
+      line.on("click", (e) => { L.DomEvent.stopPropagation(e); onTrackClick(entry, e.latlng); });
       line.on("mouseover", () => line.setStyle({ weight: 7 }));
       line.on("mouseout", () => line.setStyle({ weight: entry === activeTrack ? 7 : 4 }));
       trackLayer.addLayer(line);
@@ -180,6 +182,50 @@
       const x = Date.parse(p.taken);
       return x >= s && x <= e;
     }));
+  }
+
+  // all tracks passing within TRACK_HIT_PX of latlng, oldest first
+  function tracksAt(latlng) {
+    const pt = map.latLngToLayerPoint(latlng);
+    return tracks
+      .filter((entry) => {
+        // cheap bounding-box check before walking all points
+        const b = entry.line.getBounds();
+        const sw = map.latLngToLayerPoint(b.getSouthWest()), ne = map.latLngToLayerPoint(b.getNorthEast());
+        if (pt.x < sw.x - TRACK_HIT_PX || pt.x > ne.x + TRACK_HIT_PX ||
+            pt.y > sw.y + TRACK_HIT_PX || pt.y < ne.y - TRACK_HIT_PX) return false;
+        const closest = entry.line.closestLayerPoint(pt);
+        return closest && closest.distance <= TRACK_HIT_PX;
+      })
+      .sort((a, b) => (a.data.start ? Date.parse(a.data.start) : 0) - (b.data.start ? Date.parse(b.data.start) : 0));
+  }
+
+  function onTrackClick(entry, latlng) {
+    const hits = tracksAt(latlng);
+    if (!hits.includes(entry)) hits.push(entry);
+    if (hits.length === 1) selectTrack(entry, false, latlng);
+    else showTrackChooser(hits, latlng);
+  }
+
+  // menu for picking one of several overlapping tracks
+  function showTrackChooser(entries, latlng) {
+    const div = document.createElement("div");
+    div.className = "track-chooser";
+    div.innerHTML = `<h3>${entries.length} tracks here</h3>`;
+    const ul = document.createElement("ul");
+    for (const entry of entries) {
+      const t = entry.data;
+      const li = document.createElement("li");
+      const sub = [t.start ? fmtDate(t.start) : "No date", fmtKm(t.distance_m)].join(" · ");
+      li.innerHTML = `<span class="swatch" style="background:${entry.color}"></span>` +
+        `<span class="name" title="${esc(t.file)}">${esc(t.name)}</span><span class="sub">${esc(sub)}</span>`;
+      li.addEventListener("mouseenter", () => entry.line.setStyle({ weight: 7 }).bringToFront());
+      li.addEventListener("mouseleave", () => entry.line.setStyle({ weight: entry === activeTrack ? 7 : 4 }));
+      li.addEventListener("click", () => selectTrack(entry, false, latlng));
+      ul.appendChild(li);
+    }
+    div.appendChild(ul);
+    L.popup({ maxWidth: 280, minWidth: 220 }).setLatLng(latlng).setContent(div).openOn(map);
   }
 
   function selectTrack(entry, fit, latlng) {
