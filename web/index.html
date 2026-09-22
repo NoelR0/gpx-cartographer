@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Cartographer</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗺️</text></svg>">
+  <link rel="stylesheet" href="static/vendor/leaflet.css">
+  <link rel="stylesheet" href="static/vendor/MarkerCluster.css">
+  <link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+  <div id="map"></div>
+
+  <aside id="panel" class="panel">
+    <header class="panel-head">
+      <h1>Cartographer</h1>
+      <button id="reload" class="icon-btn" title="Ordner neu einlesen" aria-label="Neu laden">⟳</button>
+      <button id="collapse" class="icon-btn" title="Einklappen" aria-label="Seitenleiste ein-/ausklappen">‹</button>
+    </header>
+    <div class="panel-body">
+      <div id="status" class="status">Lade…</div>
+      <div class="toggles">
+        <label><input type="checkbox" id="show-photos" checked> Fotos <span id="count-photos" class="badge">0</span></label>
+        <label><input type="checkbox" id="show-tracks" checked> Tracks <span id="count-tracks" class="badge">0</span></label>
+      </div>
+      <button id="fit-all" class="text-btn">Alles anzeigen</button>
+      <h2>Tracks</h2>
+      <ul id="track-list" class="track-list"></ul>
+    </div>
+    <footer id="version" class="panel-foot"></footer>
+  </aside>
+  <button id="expand" class="panel-expand" title="Seitenleiste öffnen" aria-label="Seitenleiste öffnen">☰</button>
+
+  <div id="lightbox" class="lightbox" hidden>
+    <div class="lb-top">
+      <div class="lb-info">
+        <div id="lb-title" class="lb-title"></div>
+        <div id="lb-meta" class="lb-meta"></div>
+      </div>
+      <a id="lb-download" class="lb-btn" title="Original herunterladen" download>⤓</a>
+      <button id="lb-locate" class="lb-btn" title="Auf Karte zeigen">⌖</button>
+      <button id="lb-close" class="lb-btn" title="Schliessen (Esc)">✕</button>
+    </div>
+    <div class="lb-stage">
+      <button id="lb-prev" class="lb-nav prev" aria-label="Vorheriges Foto">‹</button>
+      <img id="lb-img" alt="">
+      <button id="lb-next" class="lb-nav next" aria-label="Nächstes Foto">›</button>
+    </div>
+    <div id="lb-strip" class="lb-strip"></div>
+  </div>
+
+  <script src="static/vendor/leaflet.js"></script>
+  <script src="static/vendor/leaflet.markercluster.js"></script>
+  <script src="static/app.js"></script>
+</body>
+</html>
