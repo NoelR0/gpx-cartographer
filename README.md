@@ -30,6 +30,11 @@ embedded. Nothing is ever written to disk.
 - GPX tracks and routes in different colours, with a list showing date, distance and elevation gain
 - Click a track → statistics, "view photos" (all photos taken while the track was recorded),
   GPX download
+- Photos tab: all photos as a grid, newest first and grouped by day, filterable by
+  whether they have a position (so photos missing from the map can be found too)
+- Statistics tab: all-time totals and records, the year compared with the two before it,
+  months, weeks of a month, an activity calendar (one square per day), weekday and start time;
+  average speed both in motion and including breaks
 - Photos **without** GPS data are placed on a GPX track based on when they were taken
   (shown with a dashed border)
 - JPEG and PNG; subfolders are included, hidden folders such as `.stversions` are ignored

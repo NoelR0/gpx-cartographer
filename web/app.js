@@ -134,6 +134,8 @@
     $("status").innerHTML = notes.join("<br>") || `Updated ${new Date().toLocaleTimeString()}`;
 
     if (fit) fitAll();
+    GPXStats.setData(data);
+    GPXGallery.setData(data);
   }
 
   function makePhotoMarker(p) {
@@ -172,6 +174,28 @@
       entry.li = li;
       ul.appendChild(li);
     }
+  }
+
+  // point halfway along the track (by distance), so the popup sits on the line
+  // even for tracks whose bounding-box center lies far off the route
+  function midpoint(line) {
+    const segs = line.getLatLngs().filter((s) => s.length);
+    let total = 0;
+    for (const s of segs) for (let i = 1; i < s.length; i++) total += s[i - 1].distanceTo(s[i]);
+    let rest = total / 2;
+    for (const s of segs) {
+      for (let i = 1; i < s.length; i++) {
+        const d = s[i - 1].distanceTo(s[i]);
+        if (rest <= d) {
+          const f = d ? rest / d : 0;
+          return L.latLng(s[i - 1].lat + (s[i].lat - s[i - 1].lat) * f, s[i - 1].lng + (s[i].lng - s[i - 1].lng) * f);
+        }
+        rest -= d;
+      }
+    }
+    // only reached through rounding at the very end of the track
+    const last = segs[segs.length - 1];
+    return last[last.length - 1];
   }
 
   function photosOfTrack(t) {
@@ -256,7 +280,7 @@
       (inTrack.length ? `<a data-act="photos">View ${inTrack.length} photo(s)</a>` : "") +
       `<a href="api/track/download?file=${encodeURIComponent(t.file)}" download>Download GPX</a></div>`;
     div.querySelector('[data-act="photos"]')?.addEventListener("click", () => openLightbox(inTrack, 0));
-    const pos = latlng || entry.line.getBounds().getCenter();
+    const pos = latlng || midpoint(entry.line);
     L.popup({ maxWidth: 260 }).setLatLng(pos).setContent(div).openOn(map);
   }
 
@@ -266,6 +290,22 @@
     activeTrack.li?.classList.remove("active");
     activeTrack = null;
   });
+
+  // called from the statistics view
+  function showTracks(ids) {
+    const entries = tracks.filter((entry) => ids.includes(entry.data.id));
+    if (entries.length === 1) {
+      selectTrack(entries[0], true);
+    } else if (entries.length) {
+      if (!map.hasLayer(trackLayer)) {
+        $("show-tracks").checked = true;
+        map.addLayer(trackLayer);
+      }
+      const b = L.latLngBounds([]);
+      entries.forEach((entry) => b.extend(entry.line.getBounds()));
+      map.fitBounds(b, { padding: [40, 40] });
+    }
+  }
 
   function fitAll() {
     const b = L.latLngBounds([]);
@@ -312,6 +352,7 @@
     if (p.located_by === "track") meta.push("Position from GPX track");
     $("lb-meta").textContent = meta.filter(Boolean).join(" · ");
     $("lb-download").href = originalUrl(p);
+    $("lb-locate").hidden = p.lat == null;
     $("lb-prev").disabled = i === 0;
     $("lb-next").disabled = i === lb.list.length - 1;
 
@@ -334,7 +375,8 @@
   function locateCurrent() {
     const p = lb.list[lb.index];
     closeLightbox();
-    if (!p) return;
+    if (!p || p.lat == null) return;
+    location.hash = "map";
     const marker = photoLayer.getLayers().find((m) => m.photo === p);
     if (marker) photoLayer.zoomToShowLayer(marker);
     else map.setView([p.lat, p.lon], 17);
@@ -363,6 +405,16 @@
     if (Math.abs(dx) > 50) showPhoto(lb.index + (dx < 0 ? 1 : -1));
   });
 
+  // ---------- View tabs ----------
+  function markActiveTab() {
+    const hash = ["#gallery", "#stats"].includes(location.hash) ? location.hash : "#map";
+    for (const a of document.querySelectorAll(".view-tabs a")) {
+      a.classList.toggle("active", a.getAttribute("href") === hash);
+    }
+  }
+  window.addEventListener("hashchange", markActiveTab);
+  markActiveTab();
+
   // ---------- Sidebar ----------
   $("show-photos").addEventListener("change", (e) =>
     e.target.checked ? map.addLayer(photoLayer) : map.removeLayer(photoLayer));
@@ -376,5 +428,7 @@
 
   map.addLayer(trackLayer);
   map.addLayer(photoLayer);
+  GPXStats.init({ showTracks });
+  GPXGallery.init({ openLightbox });
   loadConfig().then(() => loadData(true));
 })();

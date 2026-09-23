@@ -176,3 +176,30 @@ func BenchmarkParse(b *testing.B) {
 		_, _ = Parse(strings.NewReader(src), "x.gpx", Options{SimplifyM: 3})
 	}
 }
+
+func TestMovingTime(t *testing.T) {
+	var seg []point
+	var ts int64
+	lat := 47.0
+	add := func(n int, step float64, jitter bool) {
+		for i := 0; i < n; i++ {
+			ts++
+			lat += step
+			p := point{lat: lat, lon: 8.5, t: ts, hasTime: true}
+			if jitter && i%2 == 1 {
+				p.lat += 0.00002 // ~2 m of GPS noise while standing still
+			}
+			seg = append(seg, p)
+		}
+	}
+	add(120, 0.00001, false) // ~1.1 m/s for 2 minutes
+	add(120, 0, true)        // standing still for 2 minutes
+	ts += 600                // recording paused for 10 minutes
+	add(60, 0.00001, false)  // moving again for 1 minute
+
+	// The last moving second before the stop and the first one after the
+	// pause fall into windows that are partly still, so allow some slack.
+	if got := movingTime(seg); got < 170 || got > 190 {
+		t.Errorf("moving time = %d s, want ~180", got)
+	}
+}

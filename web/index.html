@@ -32,6 +32,43 @@
   </aside>
   <button id="expand" class="panel-expand" title="Open sidebar" aria-label="Open sidebar">☰</button>
 
+  <nav class="view-tabs" aria-label="View">
+    <a href="#map" class="active">Map</a>
+    <a href="#gallery">Photos</a>
+    <a href="#stats">Statistics</a>
+  </nav>
+
+  <main id="gallery" class="stats-view" hidden>
+    <div class="stats-inner">
+      <div class="stats-head">
+        <h1>Photos <span id="gallery-count" class="card-sub"></span></h1>
+        <div id="gallery-filter" class="segmented" role="group" aria-label="Filter">
+          <button data-filter="all">All</button>
+          <button data-filter="located">On the map</button>
+          <button data-filter="unlocated">Without position</button>
+        </div>
+      </div>
+      <div id="gallery-content"></div>
+    </div>
+  </main>
+
+  <main id="stats" class="stats-view" hidden>
+    <div class="stats-inner">
+      <div class="stats-head">
+        <h1>Statistics</h1>
+        <div id="stats-metric" class="segmented" role="group" aria-label="Measure">
+          <button data-metric="distance">Distance</button>
+          <button data-metric="time">Time</button>
+          <button data-metric="ascent">Ascent</button>
+          <button data-metric="count">Tracks</button>
+        </div>
+        <select id="stats-year" aria-label="Year"></select>
+      </div>
+      <div id="stats-content"></div>
+    </div>
+    <div id="stats-tip" class="stats-tip" hidden></div>
+  </main>
+
   <div id="lightbox" class="lightbox" hidden>
     <div class="lb-top">
       <div class="lb-info">
@@ -52,6 +89,8 @@
 
   <script src="static/vendor/leaflet.js"></script>
   <script src="static/vendor/leaflet.markercluster.js"></script>
+  <script src="static/stats.js"></script>
+  <script src="static/gallery.js"></script>
   <script src="static/app.js"></script>
 </body>
 </html>

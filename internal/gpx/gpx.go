@@ -21,6 +21,17 @@ import (
 // Elevation changes below this value are treated as GPS noise.
 const elevationThreshold = 5.0
 
+// Moving time: movement is judged over windows of at least movingWindowS
+// seconds (straight-line distance, which cancels out GPS jitter while
+// standing still). A window counts as moving if its speed reaches
+// minMovingSpeed. Gaps between two points longer than pauseGapS (e.g. a
+// paused recording) never count as moving.
+const (
+	movingWindowS  = 30
+	minMovingSpeed = 0.3 // m/s, slow enough for steep uphill hiking
+	pauseGapS      = 300
+)
+
 // Track is a <trk> or an <rte> from a GPX file.
 type Track struct {
 	ID   string // "<file>#<index>"
@@ -30,6 +41,7 @@ type Track struct {
 	DistanceM float64
 	AscentM   float64
 	DescentM  float64
+	MovingS   int64     // seconds in motion, see movingTime
 	Start     time.Time // zero if the track has no timestamps
 	End       time.Time
 
@@ -275,6 +287,8 @@ func (b *builder) endSegment() {
 		}
 	}
 
+	t.MovingS += movingTime(seg)
+
 	keep := simplify(seg, b.opt.SimplifyM)
 	out := make([]int32, 0, 2*len(keep))
 	for _, i := range keep {
@@ -304,6 +318,39 @@ func (b *builder) finish() *Track {
 	}
 	b.seg, b.timed = nil, nil
 	return t
+}
+
+// movingTime returns the seconds of seg during which the recorder moved.
+func movingTime(seg []point) int64 {
+	var moving int64
+	anchor, prev := -1, -1
+	flush := func(end int) {
+		if anchor < 0 || end <= anchor {
+			return
+		}
+		dt := seg[end].t - seg[anchor].t
+		if dt > 0 && haversine(seg[anchor], seg[end]) >= minMovingSpeed*float64(dt) {
+			moving += dt
+		}
+	}
+	for i, p := range seg {
+		if !p.hasTime {
+			continue
+		}
+		switch {
+		case prev < 0:
+			anchor = i
+		case p.t < seg[prev].t || p.t-seg[prev].t > pauseGapS:
+			flush(prev)
+			anchor = i
+		case p.t-seg[anchor].t >= movingWindowS:
+			flush(i)
+			anchor = i
+		}
+		prev = i
+	}
+	flush(prev)
+	return moving
 }
 
 // ---------------------------------------------------------------- Geometry

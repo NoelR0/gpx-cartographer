@@ -139,6 +139,7 @@ type trackJSON struct {
 	Start     *string   `json:"start"`
 	End       *string   `json:"end"`
 	DurationS *int      `json:"duration_s"`
+	MovingS   *int      `json:"moving_s"`
 	Segments  []segJSON `json:"segments"`
 }
 
@@ -211,7 +212,8 @@ func (s *server) handleData(w http.ResponseWriter, r *http.Request) {
 		if !t.Start.IsZero() {
 			start, end := t.Start.Format(time.RFC3339), t.End.Format(time.RFC3339)
 			dur := int(t.End.Sub(t.Start) / time.Second)
-			j.Start, j.End, j.DurationS = &start, &end, &dur
+			moving := int(t.MovingS)
+			j.Start, j.End, j.DurationS, j.MovingS = &start, &end, &dur, &moving
 		}
 		out.Tracks = append(out.Tracks, j)
 	}
