@@ -31,6 +31,8 @@ type server struct {
 	photos *photo.Library
 	thumbs *photo.Thumbnailer
 	tracks *files.Cache[[]*gpx.Track]
+
+	coverage coverageCache
 }
 
 func newServer(cfg *Config) *server {
@@ -48,6 +50,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /api/config", s.handleConfig)
 	mux.HandleFunc("GET /api/data", s.handleData)
 	mux.HandleFunc("GET /api/stats", s.handleStats)
+	mux.HandleFunc("GET /api/coverage", s.handleCoverage)
 	mux.HandleFunc("GET /api/photo/thumb", s.handleThumb)
 	mux.HandleFunc("GET /api/photo/full", s.handlePhoto(false))
 	mux.HandleFunc("GET /api/photo/original", s.handlePhoto(true))
@@ -245,6 +248,7 @@ func (s *server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		"tile_url":         s.cfg.TileURL,
 		"tile_attribution": s.cfg.TileAttribution,
 		"tile_max_zoom":    s.cfg.TileMaxZoom,
+		"explorer":         s.cfg.Explorer,
 	})
 }
 

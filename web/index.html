@@ -32,6 +32,17 @@
   </aside>
   <button id="expand" class="panel-expand" title="Open sidebar" aria-label="Open sidebar">☰</button>
 
+  <aside id="explorer" class="explorer">
+    <header class="explorer-head">
+      <label class="switch"><input type="checkbox" id="explorer-on" role="switch"> Explorer</label>
+      <button id="explorer-collapse" class="icon-btn" title="Show or hide statistics" aria-label="Toggle explorer statistics">⌄</button>
+    </header>
+    <div id="explorer-body" class="explorer-body" hidden>
+      <div class="explorer-count"><b id="explorer-count">0</b> tiles discovered</div>
+      <div id="tiles-coverage" class="tiles-coverage"></div>
+    </div>
+  </aside>
+
   <nav class="view-tabs" aria-label="View">
     <a href="#map" class="active">Map</a>
     <a href="#gallery">Photos</a>
@@ -91,6 +102,7 @@
   <script src="static/vendor/leaflet.markercluster.js"></script>
   <script src="static/stats.js"></script>
   <script src="static/gallery.js"></script>
+  <script src="static/tiles.js"></script>
   <script src="static/app.js"></script>
 </body>
 </html>

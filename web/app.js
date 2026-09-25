@@ -31,7 +31,7 @@
   // ---------- Map ----------
   // maxZoom must be set before the photo layer (markercluster) is added
   const map = L.map("map", { zoomControl: false, maxZoom: 19 }).setView([46.8, 8.2], 8);
-  L.control.zoom({ position: "topright" }).addTo(map);
+  L.control.zoom({ position: "bottomright" }).addTo(map);
   L.control.scale({ imperial: false, position: "bottomright" }).addTo(map);
 
   const photoLayer = L.markerClusterGroup({
@@ -77,11 +77,13 @@
   async function loadConfig() {
     try {
       const cfg = await fetch("api/config").then((r) => r.json());
+      GPXTiles.init({ map, enabled: cfg.explorer });
       $("version").textContent = `GPX Cartographer ${cfg.version}`;
       map.setMaxZoom(cfg.tile_max_zoom);
       L.tileLayer(cfg.tile_url, { maxZoom: cfg.tile_max_zoom, attribution: cfg.tile_attribution }).addTo(map);
     } catch (err) {
       $("status").innerHTML = `<span class="warn">Could not load configuration: ${esc(err.message)}</span>`;
+      GPXTiles.init({ map, enabled: false });
     }
   }
 
@@ -134,6 +136,7 @@
     $("status").innerHTML = notes.join("<br>") || `Updated ${new Date().toLocaleTimeString()}`;
 
     if (fit) fitAll();
+    GPXTiles.setData(data); // before the statistics, which show the discovered tiles
     GPXStats.setData(data);
     GPXGallery.setData(data);
   }

@@ -12,7 +12,7 @@ Shows your photos (based on their EXIF GPS data) and GPX tracks on an OpenStreet
 Both folders are re-scanned on every page load or when you click ⟳, which makes it a good fit
 for folders filled by Syncthing.
 
-It ships as a single static binary (~8 MB) with no external dependencies; the web interface is
+It ships as a single static binary (~11 MB) with no external dependencies; the web interface is
 embedded. Nothing is ever written to disk.
 
 > [!WARNING]
@@ -30,9 +30,14 @@ embedded. Nothing is ever written to disk.
 - GPX tracks and routes in different colours, with a list showing date, distance and elevation gain
 - Click a track → statistics, "view photos" (all photos taken while the track was recorded),
   GPX download
+- Explorer mode (on by default): the map starts out black, and every zoom-14 map tile one of
+  your tracks passes through is uncovered together with its eight neighbours. The panel on the
+  right shows how many tiles you have discovered and how much of the state/province, country,
+  continent and world (land area) at the map center that is
 - Photos tab: all photos as a grid, newest first and grouped by day, filterable by
   whether they have a position (so photos missing from the map can be found too)
-- Statistics tab: all-time totals and records, the year compared with the two before it,
+- Statistics tab: all-time totals and records (including the discovered share of the world's
+  land area from explorer mode), the year compared with the two before it,
   months, weeks of a month, an activity calendar (one square per day), weekday and start time;
   average speed both in motion and including breaks
 - Photos **without** GPS data are placed on a GPX track based on when they were taken
@@ -79,14 +84,14 @@ folders and run:
 docker compose up -d --build
 ```
 
-The image is based on `scratch` (just the binary, ~8 MB) and runs as user `nobody`. The folders
+The image is based on `scratch` (just the binary, ~11 MB) and runs as user `nobody`. The folders
 are mounted read-only (`:ro`). If `nobody` cannot read the files, set `user: "<uid>:<gid>"` of
 your Syncthing user in the compose file.
 
 ## Configuration
 
-Environment variables (the first four are also available as the flags `-photos`, `-gpx`,
-`-addr`, `-tz`):
+Environment variables (`PHOTO_DIR`, `GPX_DIR`, `ADDR`, `CAMERA_TZ` and `EXPLORER` are also
+available as the flags `-photos`, `-gpx`, `-addr`, `-tz` and `-explorer`, e.g. `-explorer=false`):
 
 | Variable | Default | Description |
 | --- | --- | --- |
@@ -103,6 +108,7 @@ Environment variables (the first four are also available as the flags `-photos`,
 | `TILE_URL` | OSM default | Tile server, e.g. `https://tile.opentopomap.org/{z}/{x}/{y}.png` (see below) |
 | `TILE_ATTRIBUTION` | OSM | Attribution shown for the tiles |
 | `TILE_MAX_ZOOM` | `19` | Maximum zoom level |
+| `EXPLORER` | `true` | Start in [explorer mode](#explorer-mode); `false` starts with the normal map |
 | `GOMEMLIMIT` | `64MiB` in the image | Soft memory limit of the Go runtime |
 
 ### Map tiles
@@ -111,6 +117,59 @@ By default, tiles are loaded from `tile.openstreetmap.org`. That is fine for per
 the OpenStreetMap Foundation's [Tile Usage Policy](https://operations.osmfoundation.org/policies/tiles/)
 prohibits heavy use. If you run the application for many users, set `TILE_URL` to a different
 provider or your own tile server and adjust `TILE_ATTRIBUTION` accordingly.
+
+## Explorer mode
+
+Explorer mode turns your tracks into a map you uncover, like the fog of war in a game:
+
+- The whole map starts out **black**.
+- The world is divided into the map tiles of **zoom level 14** (about 2.4 × 2.4 km at the
+  equator, ~1.7 × 1.7 km in Central Europe).
+- Every tile one of your tracks passes through is uncovered **together with its eight
+  neighbours**, so a single ride reveals a strip about three tiles wide.
+- Tracks and photos stay visible on top of the black area. Once zoomed in far enough, a thin
+  grid shows the tile borders.
+- Only tracks **with timestamps** count; planned routes without times do not uncover anything.
+
+The panel on the top right switches the mode on and off and shows
+
+- how many tiles you have discovered, and
+- how much of the **state/province, country, continent and world** (land area) at the map
+  center that is, in % and km². Tiles at sea are not counted.
+
+The statistics tab shows the discovered share of the world's land area in the *All time* card,
+whether explorer mode is on or not.
+
+### Starting with the normal map
+
+Explorer mode is **on by default**, i.e. every time the page is loaded. To start with the normal
+map instead, set the environment variable `EXPLORER=false`, for example in `docker-compose.yml`:
+
+```yaml
+    environment:
+      EXPLORER: "false"
+```
+
+or pass the flag when starting the binary:
+
+```sh
+./gpx-cartographer -explorer=false
+```
+
+The switch in the panel still turns explorer mode on for the current visit; the setting only
+decides how the map starts.
+
+### What it costs
+
+- **Memory:** the region outlines needed for the area statistics (~7 MB, embedded in the
+  binary) are loaded the first time the statistics are requested (explorer mode switched on or
+  statistics tab opened) and then stay in memory. With `EXPLORER=false` and the statistics tab
+  never opened, they are not loaded at all.
+- **CPU:** the discovered area is computed once per set of tracks and cached; it is only
+  recomputed when GPX files are added, changed or removed.
+- **Browser:** the discovered tiles are computed and drawn in the browser from the track data
+  that is loaded anyway; no extra requests to the tile server are made.
+- **Binary size:** the embedded region data (Natural Earth, public domain) adds ~3 MB.
 
 ## Memory usage
 
@@ -133,6 +192,9 @@ How this is achieved:
   Only photos without an embedded preview are decoded, at most `THUMB_WORKERS` at a time
   (a 12 MP photo takes up ~18 MB while being decoded).
 - Metadata and thumbnails are kept in memory as long as the file does not change.
+- **Region outlines** for the explorer statistics (~7 MB) are only loaded once the
+  statistics are requested for the first time (when explorer mode is switched on or the
+  statistics tab is opened).
 
 `/api/stats` shows the current memory usage.
 
@@ -141,6 +203,8 @@ How this is achieved:
 - `GET /api/data` – all photos and tracks (JSON, gzip)
 - `GET /api/photo/thumb?path=…`, `/api/photo/full?path=…`, `/api/photo/original?path=…`
 - `GET /api/track/download?file=…`
+- `GET /api/coverage?lat=…&lon=…` – discovered share (explorer mode) of the world and of the
+  continent, country and state at lat/lon
 - `GET /api/stats` – memory usage
 - `GET /healthz`
 
@@ -182,5 +246,9 @@ GPX Cartographer is licensed under the [MIT License](LICENSE).
 Apart from the Go standard library, no Go modules are used. The Docker image contains all
 license texts in `/licenses`. If you redistribute the binary yourself, include the license
 texts as well.
+
+| Data | License | Notes |
+| --- | --- | --- |
+| [Natural Earth](https://www.naturalearthdata.com) 1:10m admin 0 and admin 1 | Public domain | simplified and embedded as `internal/regions/regions.bin.gz`, regenerate with `go generate ./internal/regions` |
 
 Map data © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors (ODbL).

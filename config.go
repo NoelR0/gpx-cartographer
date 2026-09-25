@@ -28,6 +28,8 @@ type Config struct {
 	TileAttribution string
 	TileMaxZoom     int
 
+	Explorer bool // start with the explorer fog on
+
 	// Command line only
 	Healthcheck bool
 	ShowVersion bool
@@ -97,6 +99,7 @@ func loadConfig(args []string) (*Config, error) {
 		TileURL:         envStr("TILE_URL", "https://tile.openstreetmap.org/{z}/{x}/{y}.png"),
 		TileAttribution: envStr("TILE_ATTRIBUTION", `&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors`),
 		TileMaxZoom:     envInt("TILE_MAX_ZOOM", 19),
+		Explorer:        envBool("EXPLORER", true),
 	}
 	tzName := envStr("CAMERA_TZ", envStr("TZ", "Europe/Zurich"))
 
@@ -105,6 +108,7 @@ func loadConfig(args []string) (*Config, error) {
 	fs.StringVar(&c.GPXDir, "gpx", c.GPXDir, "GPX directory (GPX_DIR)")
 	fs.StringVar(&c.Addr, "addr", c.Addr, "address the server listens on (ADDR)")
 	fs.StringVar(&tzName, "tz", tzName, "time zone for photos without an EXIF offset (CAMERA_TZ)")
+	fs.BoolVar(&c.Explorer, "explorer", c.Explorer, "start in explorer mode; -explorer=false starts with the full map (EXPLORER)")
 	fs.BoolVar(&c.Healthcheck, "healthcheck", false, "check whether a running server responds (for Docker)")
 	fs.BoolVar(&c.ShowVersion, "version", false, "print version")
 	if err := fs.Parse(args); err != nil {

@@ -14,6 +14,8 @@ services:
       # Locate photos without GPS using the timestamps of the GPX tracks
       MATCH_PHOTOS_TO_TRACKS: "true"
       MATCH_MAX_GAP: "300"
+      # Start with the normal map instead of the black explorer map
+      # EXPLORER: "false"
     volumes:
       # Left side: your directories on the host
       - /path/to/photos:/data/photos:ro

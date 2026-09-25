@@ -43,6 +43,8 @@ window.GPXStats = (() => {
   let tips = [];           // tooltip HTML, referenced by data-tip index
   let lineCharts = {};     // data for crosshair tooltips of line charts
   let showTracks = () => {};
+  let discovery = null;    // discovered land area of the world from /api/coverage, or {error}
+  let discoverySeq = 0;    // ignores responses to outdated requests
 
   const pad2 = (n) => String(n).padStart(2, "0");
   const dayKey = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
@@ -81,6 +83,8 @@ window.GPXStats = (() => {
     }
     loaded = true;
     dirty = true;
+    discovery = null;
+    discoverySeq++;
     if (isVisible()) render();
   }
 
@@ -269,8 +273,8 @@ window.GPXStats = (() => {
   }
 
   // ---------- Sections ----------
-  function tile(label, value, sub = "") {
-    return `<div class="tile"><div class="tile-label">${esc(label)}</div><div class="tile-value">${value}</div>` +
+  function tile(label, value, sub = "", id = "") {
+    return `<div class="tile"${id ? ` id="${id}"` : ""}><div class="tile-label">${esc(label)}</div><div class="tile-value">${value}</div>` +
       (sub ? `<div class="tile-sub">${sub}</div>` : "") + `</div>`;
   }
 
@@ -285,6 +289,40 @@ window.GPXStats = (() => {
   const EVEREST_M = 8848;
   // "0.26×", "3.4×": two decimals below 1 so small totals don't round to 0
   const times = (v, ref) => num(v / ref, v < ref ? 2 : 1) + "×";
+
+  const fmtPct = (part, total) => {
+    const p = total ? Math.min(100, (part / total) * 100) : 0;
+    if (p === 0) return "0 %";
+    if (p >= 1) return p.toLocaleString(undefined, { maximumFractionDigits: p >= 10 ? 1 : 2 }) + " %";
+    return p.toLocaleString(undefined, { maximumSignificantDigits: 2 }) + " %";
+  };
+
+  // share of the world's land area uncovered in explorer mode (see tiles.js)
+  function discoveryTile() {
+    const tiles = GPXTiles.count();
+    const tilesText = `${num(tiles)} tile${tiles === 1 ? "" : "s"}`;
+    if (!discovery) return tile("Discovered", "…", esc(tilesText), "stats-discovery");
+    if (discovery.error) return tile("Discovered", "–", esc(tilesText), "stats-discovery");
+    const w = discovery.world;
+    return tile("Discovered", esc(fmtPct(w.visited_km2, w.area_km2)),
+      `${esc(tilesText)} · ${esc(num(w.visited_km2, w.visited_km2 < 10 ? 1 : 0))} km² of the world's land`, "stats-discovery");
+  }
+
+  async function loadDiscovery() {
+    const seq = discoverySeq;
+    let result;
+    try {
+      const res = await fetch("api/coverage", { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      result = { world: (await res.json()).world };
+    } catch (err) {
+      result = { error: err.message };
+    }
+    if (seq !== discoverySeq) return;
+    discovery = result;
+    const el = $("stats-discovery");
+    if (el) el.outerHTML = discoveryTile();
+  }
 
   function lifetimeSection() {
     const t = totals(acts);
@@ -321,6 +359,7 @@ window.GPXStats = (() => {
         ${tile("Longest streak", esc(`${st.longest} day${st.longest === 1 ? "" : "s"}`), st.longestEnd ? `until ${esc(fmtDate(st.longestEnd))}` : "")}
         ${tile("Current streak", esc(`${st.current} day${st.current === 1 ? "" : "s"}`))}
         ${tile("Photos", esc(num(photoCount)))}
+        ${discoveryTile()}
       </div>
       <h3>Records</h3>
       <div class="records">
@@ -512,6 +551,7 @@ window.GPXStats = (() => {
     }
     // inner width of a card: card padding is 20px on each side
     const width = Math.max(260, Math.min(root.clientWidth, 1100) - 40);
+    if (!discovery) loadDiscovery();
     root.innerHTML = lifetimeSection() + yearSection(width) + monthsSection(width) +
       weeksSection(width) + calendarSection(width) + weekdaySection(width);
   }
