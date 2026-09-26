@@ -207,9 +207,21 @@ window.GPXTiles = (() => {
       layer.remove();
       layer = null;
     }
+    $("explorer-fab").classList.toggle("active", enabled);
+    $("explorer-fab").setAttribute("aria-label", enabled ? "Explorer (on)" : "Explorer (off)");
+    $("explorer-badge").hidden = !enabled || !current().size;
+    if (enabled) $("explorer-badge").textContent = fmtCompact.format(current().size);
     $("explorer-body").hidden = !enabled;
     $("explorer-collapse").hidden = !enabled;
     scheduleCoverage(0);
+  }
+
+  const fmtCompact = new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 });
+
+  // mobile only: the panel is a popover opened from the map button
+  function setOpen(open) {
+    $("explorer").classList.toggle("open", open);
+    $("explorer-fab").setAttribute("aria-expanded", String(open));
   }
 
   function setCollapsed(collapsed) {
@@ -232,12 +244,15 @@ window.GPXTiles = (() => {
     });
 
     const stored = store.get("explorer-collapsed");
-    setCollapsed(stored ? stored === "1" : window.matchMedia("(max-width: 640px)").matches);
+    setCollapsed(stored === "1");
     $("explorer-collapse").addEventListener("click", () => {
       const collapsed = !$("explorer").classList.contains("collapsed");
       setCollapsed(collapsed);
       store.set("explorer-collapsed", collapsed ? "1" : "0");
     });
+
+    $("explorer-fab").addEventListener("click", () => setOpen(!$("explorer").classList.contains("open")));
+    map.on("click", () => setOpen(false));
 
     map.on("moveend", () => scheduleCoverage());
     refresh();

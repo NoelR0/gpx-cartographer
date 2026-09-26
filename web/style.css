@@ -113,6 +113,19 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); }
 .explorer.collapsed .explorer-head .icon-btn { transform: rotate(90deg); }
 .explorer.collapsed .explorer-body { display: none; }
 .explorer-body { padding: 10px 14px 14px; border-top: 1px solid var(--line); overflow-y: auto; }
+.explorer-fab {
+  position: fixed; z-index: 1000; top: 12px; right: 8px;
+  width: 42px; height: 42px; border: 0; border-radius: 10px;
+  background: var(--bg); color: var(--fg); box-shadow: var(--shadow);
+  font-size: 20px; cursor: pointer; display: none;
+}
+.explorer-fab.active { background: var(--accent); color: #fff; }
+.explorer-badge {
+  position: absolute; top: -6px; right: -6px; min-width: 18px; padding: 1px 5px;
+  border-radius: 99px; background: var(--bg); color: var(--fg); box-shadow: var(--shadow);
+  font-size: 10px; font-weight: 650; line-height: 16px; font-variant-numeric: tabular-nums;
+}
+.explorer-badge[hidden] { display: none; }
 .explorer-count { font-size: 13px; color: var(--muted); }
 .explorer-count b { font-size: 20px; font-weight: 650; color: var(--fg); font-variant-numeric: tabular-nums; margin-right: 2px; }
 .tiles-coverage { margin-top: 12px; font-size: 13px; }
@@ -395,7 +408,12 @@ table.data tr:last-child > * { border-bottom: 0; }
 
 @media (max-width: 640px) {
   .view-tabs { left: 50%; }
-  .explorer { right: 8px; width: 220px; max-height: calc(55vh - 80px); }
+  .explorer-fab { display: block; }
+  .explorer { top: 62px; right: 8px; width: 220px; max-height: calc(55vh - 80px); display: none; }
+  .explorer.open { display: flex; }
+  /* the popover is already the "details" view, so no collapsing inside it */
+  #explorer-collapse { display: none; }
+  .explorer.collapsed .explorer-body:not([hidden]) { display: block; }
   .gallery-grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 3px; }
   .card { padding: 14px 16px; }
   .hero-value { font-size: 40px; }
