@@ -52,12 +52,31 @@ type Track struct {
 	// Time index of all points with a timestamp, sorted by time.
 	// times are seconds since Start.
 	lats, lons, times []int32
+
+	// All points with elevation and time, only filled with Options.Detail.
+	Detail *Detail
 }
+
+// Detail holds the full profile of a track for the detail view. All slices
+// have the same length; points are in recording order.
+type Detail struct {
+	Lat, Lon []float64
+	DistM    []float64 // distance from the start, summed per segment like DistanceM
+	Ele      []float64 // NaN if the point has no elevation
+	Time     []int64   // seconds since Track.Start, NoTime if the point has none
+	SegStart []int     // index of the first point of every segment
+}
+
+// NoTime marks points without a timestamp in Detail.Time.
+const NoTime = math.MinInt64
 
 // Options controls parsing.
 type Options struct {
 	// Maximum deviation of the simplified line in meters (0 = off).
 	SimplifyM float64
+	// Keep every point in Track.Detail. Costs about 48 bytes per point, so it
+	// is only meant for parsing a single file on request.
+	Detail bool
 }
 
 type point struct {
@@ -266,6 +285,9 @@ func (b *builder) endSegment() {
 	}
 	t := b.track
 
+	if b.opt.Detail {
+		b.addDetail(seg, t.DistanceM)
+	}
 	ref, hasRef := 0.0, false
 	for i, p := range seg {
 		if i > 0 {
@@ -316,8 +338,83 @@ func (b *builder) finish() *Track {
 			t.lats[i], t.lons[i], t.times[i] = p.lat, p.lon, int32(p.t-start)
 		}
 	}
+	if d := t.Detail; d != nil {
+		for i, v := range d.Time {
+			if v != NoTime {
+				d.Time[i] = v - t.Start.Unix()
+			}
+		}
+	}
 	b.seg, b.timed = nil, nil
 	return t
+}
+
+// addDetail appends the points of seg to the track's detail profile. dist is
+// the track distance before seg; it is summed up exactly like DistanceM.
+func (b *builder) addDetail(seg []point, dist float64) {
+	d := b.track.Detail
+	if d == nil {
+		d = &Detail{}
+		b.track.Detail = d
+	}
+	d.SegStart = append(d.SegStart, len(d.Lat))
+	for i, p := range seg {
+		if i > 0 {
+			dist += haversine(seg[i-1], p)
+		}
+		ele, tm := math.NaN(), int64(NoTime)
+		if p.hasEle {
+			ele = p.ele
+		}
+		if p.hasTime {
+			tm = p.t // made relative to Start in finish
+		}
+		d.Lat, d.Lon = append(d.Lat, p.lat), append(d.Lon, p.lon)
+		d.DistM, d.Ele, d.Time = append(d.DistM, dist), append(d.Ele, ele), append(d.Time, tm)
+	}
+}
+
+// Reduce thins out the profile to roughly maxPoints points, evenly spaced by
+// distance. The first and last point of every segment and both ends of a
+// recording pause (see pauseGapS) are always kept, so gaps stay visible.
+func (d *Detail) Reduce(maxPoints int) {
+	n := len(d.Lat)
+	if n <= maxPoints || maxPoints < 2 {
+		return
+	}
+	step := (d.DistM[n-1] - d.DistM[0]) / float64(maxPoints)
+	segEnd := make(map[int]bool, len(d.SegStart))
+	segStart := make(map[int]bool, len(d.SegStart))
+	for k, s := range d.SegStart {
+		segStart[s] = true
+		if k > 0 {
+			segEnd[s-1] = true
+		}
+	}
+	segEnd[n-1] = true
+	paused := func(i, j int) bool {
+		return d.Time[i] != NoTime && d.Time[j] != NoTime && d.Time[j]-d.Time[i] > pauseGapS
+	}
+
+	out, last := 0, -1
+	newStarts := d.SegStart[:0]
+	for i := 0; i < n; i++ {
+		keep := segStart[i] || segEnd[i] ||
+			d.DistM[i]-d.DistM[last] >= step ||
+			(i+1 < n && !segStart[i+1] && paused(i, i+1)) ||
+			(!segStart[i] && paused(i-1, i))
+		if !keep {
+			continue
+		}
+		if segStart[i] {
+			newStarts = append(newStarts, out)
+		}
+		d.Lat[out], d.Lon[out], d.DistM[out], d.Ele[out], d.Time[out] = d.Lat[i], d.Lon[i], d.DistM[i], d.Ele[i], d.Time[i]
+		out++
+		last = i
+	}
+	d.SegStart = newStarts
+	d.Lat, d.Lon, d.DistM, d.Ele, d.Time = d.Lat[:out], d.Lon[:out], d.DistM[:out], d.Ele[:out], d.Time[:out]
 }
 
 // movingTime returns the seconds of seg during which the recorder moved.

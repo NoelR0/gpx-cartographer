@@ -55,6 +55,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /api/photo/full", s.handlePhoto(false))
 	mux.HandleFunc("GET /api/photo/original", s.handlePhoto(true))
 	mux.HandleFunc("GET /api/track/download", s.handleTrackDownload)
+	mux.HandleFunc("GET /api/track/detail", s.handleTrackDetail)
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(web.FS)))
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-cache")
@@ -340,6 +341,82 @@ func (s *server) handleTrackDownload(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/gpx+xml")
 	setAttachment(w, info.Name())
 	http.ServeContent(w, r, info.Name(), info.ModTime(), f)
+}
+
+// detailMaxPoints limits the profile sent for the detail view: plenty for
+// charts and the map, while keeping the response small (~100 KB gzipped).
+const detailMaxPoints = 3000
+
+// floatsJSON outputs numbers with a fixed number of decimals, NaN as null.
+type floatsJSON struct {
+	v      []float64
+	digits int
+}
+
+func (f floatsJSON) MarshalJSON() ([]byte, error) {
+	buf := make([]byte, 0, len(f.v)*(f.digits+6)+2)
+	buf = append(buf, '[')
+	for i, v := range f.v {
+		if i > 0 {
+			buf = append(buf, ',')
+		}
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			buf = append(buf, "null"...)
+		} else {
+			buf = strconv.AppendFloat(buf, v, 'f', f.digits, 64)
+		}
+	}
+	return append(buf, ']'), nil
+}
+
+// handleTrackDetail re-reads a single GPX file and returns the full profile
+// of one track (id as in /api/data). Nothing is cached, so the extra memory
+// is only needed while the request runs.
+func (s *server) handleTrackDetail(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	hash := strings.LastIndexByte(id, '#')
+	if hash < 0 {
+		http.NotFound(w, r)
+		return
+	}
+	f, _, err := files.Open(s.cfg.GPXDir, id[:hash], gpxExtensions)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	defer f.Close()
+	ts, err := gpx.Parse(f, id[:hash], gpx.Options{SimplifyM: s.cfg.SimplifyM, Detail: true})
+	if err != nil {
+		slog.Warn("Invalid GPX file", "file", id[:hash], "error", err)
+		http.Error(w, "invalid GPX file", http.StatusUnprocessableEntity)
+		return
+	}
+	idx := slices.IndexFunc(ts, func(t *gpx.Track) bool { return t.ID == id })
+	if idx < 0 || ts[idx].Detail == nil {
+		http.NotFound(w, r)
+		return
+	}
+	d := ts[idx].Detail
+	d.Reduce(detailMaxPoints)
+
+	times := make([]float64, len(d.Time))
+	for i, t := range d.Time {
+		if t == gpx.NoTime {
+			times[i] = math.NaN()
+		} else {
+			times[i] = float64(t)
+		}
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, r, map[string]any{
+		"id":        id,
+		"lat":       floatsJSON{d.Lat, 5},
+		"lon":       floatsJSON{d.Lon, 5},
+		"dist_m":    floatsJSON{d.DistM, 1},
+		"ele":       floatsJSON{d.Ele, 1},
+		"time_s":    floatsJSON{times, 0},
+		"seg_start": d.SegStart,
+	})
 }
 
 func setAttachment(w http.ResponseWriter, name string) {

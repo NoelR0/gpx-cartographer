@@ -3,6 +3,7 @@ package gpx
 import (
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -201,5 +202,68 @@ func TestMovingTime(t *testing.T) {
 	// pause fall into windows that are partly still, so allow some slack.
 	if got := movingTime(seg); got < 170 || got > 190 {
 		t.Errorf("moving time = %d s, want ~180", got)
+	}
+}
+
+func TestDetail(t *testing.T) {
+	start := time.Date(2026, 8, 15, 8, 0, 0, 0, time.UTC)
+	if tr := parse(t, straightTrack(10, start), Options{})[0]; tr.Detail != nil {
+		t.Fatal("detail must only be kept with Options.Detail")
+	}
+
+	// two segments, the second without elevation and starting after a 10 min break
+	gpxDoc := `<gpx><trk><trkseg>
+		<trkpt lat="47.0000" lon="8.5"><ele>400</ele><time>2026-08-15T08:00:00Z</time></trkpt>
+		<trkpt lat="47.0010" lon="8.5"><ele>410</ele><time>2026-08-15T08:01:00Z</time></trkpt>
+		</trkseg><trkseg>
+		<trkpt lat="47.0020" lon="8.5"><time>2026-08-15T08:11:00Z</time></trkpt>
+		<trkpt lat="47.0030" lon="8.5"></trkpt>
+		</trkseg></trk></gpx>`
+	tr := parse(t, gpxDoc, Options{Detail: true})[0]
+	d := tr.Detail
+	if d == nil || len(d.Lat) != 4 || len(d.DistM) != 4 || len(d.Ele) != 4 || len(d.Time) != 4 {
+		t.Fatalf("detail = %+v", d)
+	}
+	if !slices.Equal(d.SegStart, []int{0, 2}) {
+		t.Errorf("segment starts = %v", d.SegStart)
+	}
+	// the jump between the segments is not counted, just like DistanceM
+	if d.DistM[0] != 0 || math.Abs(d.DistM[1]-111) > 1 || d.DistM[2] != d.DistM[1] ||
+		math.Abs(d.DistM[3]-tr.DistanceM) > 1e-6 {
+		t.Errorf("distances = %v (total %.1f)", d.DistM, tr.DistanceM)
+	}
+	if d.Ele[1] != 410 || !math.IsNaN(d.Ele[2]) {
+		t.Errorf("elevations = %v", d.Ele)
+	}
+	if !slices.Equal(d.Time, []int64{0, 60, 660, NoTime}) {
+		t.Errorf("times = %v", d.Time)
+	}
+}
+
+func TestDetailReduce(t *testing.T) {
+	start := time.Date(2026, 8, 15, 8, 0, 0, 0, time.UTC)
+	tr := parse(t, straightTrack(1001, start), Options{Detail: true})[0]
+	d := tr.Detail
+	d.Reduce(100)
+	if n := len(d.Lat); n < 90 || n > 110 {
+		t.Errorf("%d points after reducing to 100", n)
+	}
+	if d.DistM[0] != 0 || d.DistM[len(d.DistM)-1] != tr.DistanceM || d.Time[len(d.Time)-1] != 1000 {
+		t.Error("first and last point must be kept")
+	}
+	if len(d.Lon) != len(d.Lat) || len(d.Ele) != len(d.Lat) || len(d.Time) != len(d.Lat) {
+		t.Error("slices differ in length")
+	}
+
+	// both ends of a recording pause are kept
+	d = &Detail{
+		Lat: make([]float64, 6), Lon: make([]float64, 6), Ele: make([]float64, 6),
+		DistM:    []float64{0, 1, 2, 3, 4, 100},
+		Time:     []int64{0, 1, 2, 1000, 1001, 1002},
+		SegStart: []int{0},
+	}
+	d.Reduce(2)
+	if !slices.Equal(d.Time, []int64{0, 2, 1000, 1002}) {
+		t.Errorf("times after reducing = %v", d.Time)
 	}
 }

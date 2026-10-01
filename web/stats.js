@@ -489,7 +489,8 @@ window.GPXStats = (() => {
     if (list && state.day.startsWith(String(Y))) {
       detail = `<div class="day-detail"><b>${esc(fmtDate(new Date(state.day + "T00:00")))}</b><ul>` +
         list.map((a) => `<li><button class="link" data-track="${esc(a.t.id)}">${esc(a.t.name)}</button> · ` +
-          `${esc(fmtKm(a.km))} · ${esc(fmtHours(a.movingH))} · ↑ ${esc(num(a.ascent))} m</li>`).join("") + `</ul></div>`;
+          `${esc(fmtKm(a.km))} · ${esc(fmtHours(a.movingH))} · ↑ ${esc(num(a.ascent))} m · ` +
+          `<button class="link" data-detail="${esc(a.t.id)}">Details</button></li>`).join("") + `</ul></div>`;
     }
     const active = new Set(inYear(Y).map((a) => a.key)).size;
     return `<section class="card">
@@ -604,6 +605,8 @@ window.GPXStats = (() => {
     if (bar) { state.month = Number(bar.dataset.key); render(); return; }
     const day = e.target.closest("[data-day]");
     if (day) { state.day = day.dataset.day; render(); return; }
+    const detail = e.target.closest("[data-detail]");
+    if (detail) { GPXDetail.open(detail.dataset.detail); return; }
     const one = e.target.closest("[data-track]");
     if (one) { openMap([one.dataset.track]); return; }
     const many = e.target.closest("[data-tracks]");

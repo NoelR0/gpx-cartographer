@@ -30,6 +30,11 @@ embedded. Nothing is ever written to disk.
 - GPX tracks and routes in different colours, with a list showing date, distance and elevation gain
 - Click a track → statistics, "view photos" (all photos taken while the track was recorded),
   GPX download
+- Track details (from the track popup or the activity calendar): the track alone on the map,
+  coloured by speed, gradient or elevation, with start, finish and split markers; elevation,
+  speed and gradient charts over distance or time (hovering a chart shows the spot on the map
+  and vice versa); splits per 1/5/10 km with pace or speed; distance by gradient; moving time by
+  speed; highest point, steepest climb, max. speed and the photos of the track
 - Explorer mode (on by default): the map starts out black, and every zoom-14 map tile one of
   your tracks passes through is uncovered together with its eight neighbours. The panel on the
   right shows how many tiles you have discovered and how much of the state/province, country,
@@ -203,6 +208,8 @@ How this is achieved:
 - `GET /api/data` – all photos and tracks (JSON, gzip)
 - `GET /api/photo/thumb?path=…`, `/api/photo/full?path=…`, `/api/photo/original?path=…`
 - `GET /api/track/download?file=…`
+- `GET /api/track/detail?id=…` – full profile of one track (distance, elevation, time per
+  point, thinned out to at most 3000 points); read from the GPX file on request, not cached
 - `GET /api/coverage?lat=…&lon=…` – discovered share (explorer mode) of the world and of the
   continent, country and state at lat/lon
 - `GET /api/stats` – memory usage

@@ -139,6 +139,7 @@
     GPXTiles.setData(data); // before the statistics, which show the discovered tiles
     GPXStats.setData(data);
     GPXGallery.setData(data);
+    GPXDetail.setData(data, tracks.map((entry) => entry.color));
   }
 
   function makePhotoMarker(p) {
@@ -280,8 +281,10 @@
     const div = document.createElement("div");
     div.className = "track-popup";
     div.innerHTML = `<h3>${esc(t.name)}</h3><div class="stats">${stats}</div><div class="actions">` +
+      `<a data-act="details">Details</a>` +
       (inTrack.length ? `<a data-act="photos">View ${inTrack.length} photo(s)</a>` : "") +
       `<a href="api/track/download?file=${encodeURIComponent(t.file)}" download>Download GPX</a></div>`;
+    div.querySelector('[data-act="details"]').addEventListener("click", () => GPXDetail.open(t.id));
     div.querySelector('[data-act="photos"]')?.addEventListener("click", () => openLightbox(inTrack, 0));
     const pos = latlng || midpoint(entry.line);
     L.popup({ maxWidth: 260 }).setLatLng(pos).setContent(div).openOn(map);
@@ -308,6 +311,27 @@
       entries.forEach((entry) => b.extend(entry.line.getBounds()));
       map.fitBounds(b, { padding: [40, 40] });
     }
+  }
+
+  // the detail view shows its track alone: hide all other tracks and photos
+  function setBaseLayers(visible) {
+    for (const [layer, box] of [[trackLayer, "show-tracks"], [photoLayer, "show-photos"]]) {
+      if (visible && $(box).checked) map.addLayer(layer);
+      else map.removeLayer(layer);
+    }
+  }
+
+  // after closing the detail view, keep the track highlighted on the map
+  function onDetailClose(id) {
+    const entry = tracks.find((e) => e.data.id === id);
+    if (!entry || location.hash !== "#map" && location.hash !== "") return;
+    if (activeTrack && activeTrack !== entry) {
+      activeTrack.line.setStyle({ weight: 4, opacity: 0.85 });
+      activeTrack.li?.classList.remove("active");
+    }
+    activeTrack = entry;
+    entry.line.setStyle({ weight: 7, opacity: 1 }).bringToFront();
+    entry.li?.classList.add("active");
   }
 
   function fitAll() {
@@ -433,5 +457,6 @@
   map.addLayer(photoLayer);
   GPXStats.init({ showTracks });
   GPXGallery.init({ openLightbox });
+  GPXDetail.init({ map, openLightbox, photosOfTrack, thumbUrl, setBaseLayers, onClose: onDetailClose });
   loadConfig().then(() => loadData(true));
 })();

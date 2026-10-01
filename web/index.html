@@ -44,6 +44,21 @@
     </div>
   </aside>
 
+  <aside id="detail" class="detail" hidden aria-label="Track details">
+    <header class="detail-head">
+      <button id="detail-close" class="icon-btn" title="Back (Esc)" aria-label="Close details">←</button>
+      <span id="detail-swatch" class="detail-swatch"></span>
+      <div class="detail-title">
+        <h2 id="detail-name"></h2>
+        <div id="detail-when" class="detail-when"></div>
+      </div>
+      <a id="detail-download" class="icon-btn" title="Download GPX" aria-label="Download GPX" download>⤓</a>
+      <button id="detail-min" class="icon-btn" title="Minimize" aria-label="Minimize details">⌄</button>
+    </header>
+    <div id="detail-body" class="detail-body"></div>
+  </aside>
+  <div id="detail-tip" class="stats-tip" hidden></div>
+
   <nav class="view-tabs" aria-label="View">
     <a href="#map" class="active">Map</a>
     <a href="#gallery">Photos</a>
@@ -104,6 +119,7 @@
   <script src="static/stats.js"></script>
   <script src="static/gallery.js"></script>
   <script src="static/tiles.js"></script>
+  <script src="static/detail.js"></script>
   <script src="static/app.js"></script>
 </body>
 </html>
