@@ -340,6 +340,8 @@ window.GPXStats = (() => {
     const fastest = maxBy((a) => a.km / a.movingS, (a) => a.movingS > 600 && a.km >= 2);
     // same for climbing: a short ramp would beat every real mountain tour
     const steepest = maxBy((a) => a.ascent / a.km, (a) => a.km >= 3);
+    const fresh = GPXTiles.mostNewTiles();
+    const explorer = fresh && acts.find((a) => a.t.id === fresh.id);
     let bestDay = null;
     for (const [k, list] of byDay) {
       const km = list.reduce((s, a) => s + a.km, 0);
@@ -370,6 +372,7 @@ window.GPXStats = (() => {
         ${record("Most ascent", highest, highest && num(highest.ascent) + " m")}
         ${record("Steepest", steepest, steepest && num(steepest.ascent / steepest.km) + " m/km")}
         ${record("Fastest (moving)", fastest, fastest && fmtSpeed((fastest.km * 1000) / fastest.movingS))}
+        ${record("Most new tiles", explorer, explorer && num(fresh.count))}
         ${bestDay ? `<button class="record" data-tracks="${esc(bestDay.list.map((a) => a.t.id).join("\n"))}">` +
           `<span class="record-label">Biggest day</span><span class="record-value">${esc(fmtKm(bestDay.km))}</span>` +
           `<span class="record-name">${esc(fmtDate(new Date(bestDay.k + "T00:00")))} · ${bestDay.list.length} track(s)</span></button>` : ""}

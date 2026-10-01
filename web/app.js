@@ -86,7 +86,8 @@
   async function loadConfig() {
     try {
       const cfg = await fetch("api/config").then((r) => r.json());
-      GPXTiles.init({ map, enabled: cfg.explorer });
+      // the replay shows the fog alone
+      GPXTiles.init({ map, enabled: cfg.explorer, onReplay: (on) => setBaseLayers(!on) });
       $("version").textContent = `GPX Cartographer ${cfg.version}`;
       map.setMaxZoom(cfg.tile_max_zoom);
       L.tileLayer(cfg.tile_url, { maxZoom: cfg.tile_max_zoom, attribution: cfg.tile_attribution, noWrap: true, bounds: WORLD }).addTo(map);

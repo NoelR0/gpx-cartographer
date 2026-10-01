@@ -40,9 +40,22 @@
     </header>
     <div id="explorer-body" class="explorer-body" hidden>
       <div class="explorer-count"><b id="explorer-count">0</b> tiles discovered</div>
+      <div id="explorer-recent" class="explorer-recent" hidden></div>
+      <button id="replay-start" class="replay-start" hidden>&#x25B6;&#xFE0E; Replay discoveries</button>
       <div id="tiles-coverage" class="tiles-coverage"></div>
     </div>
   </aside>
+
+  <div id="replay" class="replay" role="group" aria-label="Replay of the discoveries" hidden>
+    <button id="replay-play" class="icon-btn" aria-label="Pause">&#x23F8;&#xFE0E;</button>
+    <button id="replay-stop" class="icon-btn" title="Stop (Esc)" aria-label="Stop replay">&#x25A0;&#xFE0E;</button>
+    <div class="replay-when"><b id="replay-date"></b><span id="replay-tiles"></span></div>
+    <div class="replay-speed-group">
+      <button id="replay-slower" class="icon-btn" title="Slower" aria-label="Slower">&minus;</button>
+      <span id="replay-speed" class="replay-speed" aria-live="polite"></span>
+      <button id="replay-faster" class="icon-btn" title="Faster" aria-label="Faster">+</button>
+    </div>
+  </div>
 
   <aside id="detail" class="detail" hidden aria-label="Track details">
     <header class="detail-head">

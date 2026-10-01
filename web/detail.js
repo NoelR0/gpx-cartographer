@@ -533,6 +533,8 @@ window.GPXDetail = (() => {
     if (s.steep.up) out.push(tile("Steepest climb", esc(fmtGrade(s.steep.up.g)), `over ${STEEP_MIN_M} m`));
     if (s.steep.down) out.push(tile("Steepest descent", esc(fmtGrade(s.steep.down.g)), `over ${STEEP_MIN_M} m`));
     if (photos.length) out.push(tile("Photos", esc(num(photos.length))));
+    const fresh = GPXTiles.newTiles(t.id);
+    if (fresh != null) out.push(tile("New tiles", esc(num(fresh)), "first discovered on this track"));
     return `<div class="tiles detail-tiles">${out.join("")}</div>`;
   }
 
@@ -879,6 +881,7 @@ window.GPXDetail = (() => {
     }
     $("detail").hidden = false;
     document.body.classList.add("detail-open");
+    GPXTiles.focus(id);
     ctx.setBaseLayers(false);
     ctx.map.closePopup();
     renderHead();
@@ -912,6 +915,7 @@ window.GPXDetail = (() => {
     if (layer) { layer.clearLayers(); hoverMarker = null; lineLayer = null; splitLine = null; }
     const id = cur?.id;
     cur = null;
+    GPXTiles.focus(null);
     ctx.setBaseLayers(true);
     if (id) ctx.onClose(id);
   }

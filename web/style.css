@@ -8,6 +8,7 @@
   --shadow: 0 4px 18px rgba(0, 0, 0, .18);
   --plane: #f4f5f7;
   --good: #006300;
+  --new: #9a6a00;   /* newly uncovered explorer tiles */
   /* chart series (fixed order: selected year, previous year, the one before) */
   --s1: #2a78d6;
   --s2: #eb6834;
@@ -31,6 +32,7 @@
     --accent: #6ea0ff;
     --plane: #16181c;
     --good: #0ca30c;
+    --new: #f0b429;
     --s1: #3987e5;
     --s2: #d95926;
     --s3: #199e70;
@@ -127,6 +129,8 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); }
 }
 .explorer-badge[hidden] { display: none; }
 .explorer-count { font-size: 13px; color: var(--muted); }
+.explorer-recent { font-size: 13px; font-weight: 600; color: var(--new); margin-top: 2px; }
+.explorer-recent[hidden] { display: none; }
 .explorer-count b { font-size: 20px; font-weight: 650; color: var(--fg); font-variant-numeric: tabular-nums; margin-right: 2px; }
 .tiles-coverage { margin-top: 12px; font-size: 13px; }
 .tiles-coverage h3 { font-size: 12px; font-weight: 600; color: var(--muted); margin: 0 0 6px; }
@@ -153,7 +157,47 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); }
 
 /* Explorer fog: Leaflet fades new tiles in, which lets the map flash through
    for a moment while panning or zooming. Fog tiles are opaque right away. */
-.leaflet-explorer-pane .leaflet-tile { opacity: 1 !important; transition: none !important; }
+.leaflet-explorer-pane .leaflet-tile, .leaflet-explorerGlow-pane .leaflet-tile { opacity: 1 !important; transition: none !important; }
+/* newly uncovered tiles flash, then stay faintly highlighted */
+.leaflet-explorerGlow-pane { opacity: .3; }
+.leaflet-explorerGlow-pane.flash { animation: explorer-glow 3.5s ease-out; }
+@keyframes explorer-glow {
+  0% { opacity: 0; }
+  12% { opacity: 1; }
+  30% { opacity: .35; }
+  45% { opacity: 1; }
+  100% { opacity: .3; }
+}
+.leaflet-explorerGlow-pane.replaying { opacity: .85; }
+/* the latest track of the replay shines above the fog */
+.leaflet-replayBeam-pane { filter: drop-shadow(0 0 6px rgba(255, 190, 40, .9)); }
+.leaflet-replayBeam-pane .replay-beam { animation: replay-beam .6s ease-out; }
+@keyframes replay-beam { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .leaflet-replayBeam-pane .replay-beam { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .leaflet-explorerGlow-pane.flash { animation: none; } }
+
+/* ---------- Replay of the discoveries ---------- */
+.replay-start {
+  width: 100%; margin-top: 10px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px;
+  background: transparent; color: var(--fg); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.replay-start:hover { background: var(--hover); }
+.replay-start[hidden] { display: none; }
+.replay {
+  position: fixed; z-index: 1000; bottom: 24px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 6px; padding: 6px 8px;
+  max-width: calc(100vw - 32px);
+  background: var(--bg); color: var(--fg); border-radius: 12px; box-shadow: var(--shadow);
+}
+.replay[hidden] { display: none; }
+.replay .icon-btn:disabled { opacity: .35; cursor: default; background: transparent; }
+.replay-when { display: flex; flex-direction: column; min-width: 120px; padding: 0 8px; line-height: 1.2; }
+.replay-when b { font-size: 17px; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.replay-when span { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.replay-speed-group { display: flex; align-items: center; gap: 2px; padding-left: 6px; border-left: 1px solid var(--line); }
+.replay-speed { min-width: 76px; text-align: center; font-size: 12px; color: var(--muted); white-space: nowrap; }
+/* the replay has the map to itself */
+body.replaying .panel, body.replaying .panel-expand { display: none !important; }
 
 /* ---------- Photo markers ---------- */
 .photo-marker {
@@ -493,6 +537,9 @@ table.data.splits th:first-child { text-align: left; }
   .explorer-fab { display: block; }
   .explorer { top: 62px; right: 8px; width: 220px; max-height: calc(55vh - 80px); display: none; }
   .explorer.open { display: flex; }
+  /* keep clear of the zoom buttons at the bottom right */
+  .replay { left: 8px; right: 56px; bottom: 16px; transform: none; max-width: none; flex-wrap: wrap; justify-content: center; }
+  .replay-when { min-width: 0; flex: 1; }
   /* the popover is already the "details" view, so no collapsing inside it */
   #explorer-collapse { display: none; }
   .explorer.collapsed .explorer-body:not([hidden]) { display: block; }
