@@ -30,7 +30,16 @@
 
   // ---------- Map ----------
   // maxZoom must be set before the photo layer (markercluster) is added
-  const map = L.map("map", { zoomControl: false, maxZoom: 19 }).setView([46.8, 8.2], 8);
+  // Only one copy of the world: no repeated tiles left and right, and the map
+  // cannot be panned beyond it (tracks and photos exist only on this copy).
+  const WORLD = L.latLngBounds([-85.06, -180], [85.06, 180]);
+  const map = L.map("map", {
+    zoomControl: false, maxZoom: 19, maxBounds: WORLD, maxBoundsViscosity: 1, worldCopyJump: false,
+  }).setView([46.8, 8.2], 8);
+  // zooming out stops once the world is as wide as the window
+  const updateMinZoom = () => map.setMinZoom(Math.max(0, Math.ceil(Math.log2(map.getSize().x / 256))));
+  updateMinZoom();
+  map.on("resize", updateMinZoom);
   L.control.zoom({ position: "bottomright" }).addTo(map);
   L.control.scale({ imperial: false, position: "bottomright" }).addTo(map);
 
@@ -80,7 +89,7 @@
       GPXTiles.init({ map, enabled: cfg.explorer });
       $("version").textContent = `GPX Cartographer ${cfg.version}`;
       map.setMaxZoom(cfg.tile_max_zoom);
-      L.tileLayer(cfg.tile_url, { maxZoom: cfg.tile_max_zoom, attribution: cfg.tile_attribution }).addTo(map);
+      L.tileLayer(cfg.tile_url, { maxZoom: cfg.tile_max_zoom, attribution: cfg.tile_attribution, noWrap: true, bounds: WORLD }).addTo(map);
     } catch (err) {
       $("status").innerHTML = `<span class="warn">Could not load configuration: ${esc(err.message)}</span>`;
       GPXTiles.init({ map, enabled: false });
