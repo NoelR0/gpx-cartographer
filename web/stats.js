@@ -564,14 +564,15 @@ window.GPXStats = (() => {
   const tipEl = () => $("stats-tip");
   function showTip(html, x, y) {
     const el = tipEl();
-    el.innerHTML = html;
+    if (el.innerHTML !== html) el.innerHTML = html;
     el.hidden = false;
+    // the side depends on the cursor's half of the window, not on the
+    // tooltip's width, so it does not jump while moving between marks
     const r = el.getBoundingClientRect();
-    let left = x + 14, top = y + 14;
-    if (left + r.width > window.innerWidth - 8) left = x - r.width - 14;
-    if (top + r.height > window.innerHeight - 8) top = y - r.height - 14;
-    el.style.left = Math.max(8, left) + "px";
-    el.style.top = Math.max(8, top) + "px";
+    const left = x > window.innerWidth / 2 ? x - r.width - 16 : x + 16;
+    const top = y > window.innerHeight / 2 ? y - r.height - 16 : y + 16;
+    el.style.left = Math.max(8, Math.min(window.innerWidth - r.width - 8, left)) + "px";
+    el.style.top = Math.max(8, Math.min(window.innerHeight - r.height - 8, top)) + "px";
   }
   function hideTip() {
     tipEl().hidden = true;

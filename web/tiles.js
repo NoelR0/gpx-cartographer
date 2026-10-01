@@ -153,7 +153,10 @@ window.GPXTiles = (() => {
         return canvas;
       },
     });
-    return new Layer({ pane: "explorer", updateWhenZooming: false });
+    // Drawing a tile is cheap and synchronous, so update while panning (Leaflet
+    // waits until the pan ends on mobile by default) and keep extra tiles
+    // around; otherwise the uncovered map flashes at the edges.
+    return new Layer({ pane: "explorer", updateWhenZooming: false, updateWhenIdle: false, updateInterval: 50, keepBuffer: 4 });
   }
 
   // ---------- Discovered share of the regions at the map center ----------

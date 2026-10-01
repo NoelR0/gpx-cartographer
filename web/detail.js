@@ -55,6 +55,7 @@ window.GPXDetail = (() => {
   let lineLayer = null;
   let hoverMarker = null;
   let splitLine = null;
+  let mapLeaveTimer = 0;
   let charts = {};             // hover data of the line charts, by key
   let xAxis = null;            // shared x axis of the line charts
   let tips = [];
@@ -307,8 +308,10 @@ window.GPXDetail = (() => {
     for (const r of runs) {
       const line = L.polyline(r.pts, { color: r.color, weight: 5, opacity: 1 });
       if (p) {
-        line.on("mousemove", (e) => setHover(nearestPoint(e.latlng), e.originalEvent));
-        line.on("mouseout", clearHover);
+        line.on("mousemove", (e) => { clearTimeout(mapLeaveTimer); setHover(nearestPoint(e.latlng), e.originalEvent); });
+        // the line consists of many pieces when it is coloured; only clear the
+        // hover if the pointer does not enter the next piece right away
+        line.on("mouseout", () => { clearTimeout(mapLeaveTimer); mapLeaveTimer = setTimeout(clearHover, 120); });
         line.on("click", (e) => { L.DomEvent.stopPropagation(e); setHover(nearestPoint(e.latlng), e.originalEvent); });
       }
       lineLayer.addLayer(line);
@@ -362,6 +365,7 @@ window.GPXDetail = (() => {
   }
 
   function showSplitOnMap(s) {
+    if (splitLine && splitLine.split === s) return splitLine;
     hideSplitOnMap();
     if (!s) return;
     const p = cur.p;
@@ -369,6 +373,7 @@ window.GPXDetail = (() => {
     for (let i = indexAt(p, s.from); i < p.n && p.dist[i] <= s.to; i++) pts.push([p.lat[i], p.lon[i]]);
     if (pts.length < 2) return;
     splitLine = L.polyline(pts, { color: "#1d1f23", weight: 9, opacity: 0.55, interactive: false }).addTo(layer);
+    splitLine.split = s;
     return splitLine;
   }
   function hideSplitOnMap() {
@@ -453,15 +458,15 @@ window.GPXDetail = (() => {
     if (refLine != null && refLine > sc.lo && refLine < sc.hi) {
       out += `<line class="ref" x1="${m.left}" x2="${width - m.right}" y1="${y(refLine)}" y2="${y(refLine)}"/>`;
     }
-    // photos taken during the track, as dots on the line
+    out += `<line class="crosshair" x1="0" x2="0" y1="${m.top}" y2="${base}" visibility="hidden"/>`;
+    out += `<circle class="dot s1" r="4" visibility="hidden"/>`;
+    out += `<rect class="hit-line" data-chart="${key}" x="${m.left}" y="${m.top}" width="${A.iw}" height="${ih}"/>`;
+    // photos taken during the track, as dots on the line (above the hover area, so they can be hovered)
     for (const ph of photos || []) {
       const i = ph.i;
       if (ys[i] == null) continue;
       out += `<circle class="photo-dot" cx="${A.x(A.xOf(i))}" cy="${y(ys[i])}" r="5" data-photo="${ph.k}"/>`;
     }
-    out += `<line class="crosshair" x1="0" x2="0" y1="${m.top}" y2="${base}" visibility="hidden"/>`;
-    out += `<circle class="dot s1" r="4" visibility="hidden"/>`;
-    out += `<rect class="hit-line" data-chart="${key}" x="${m.left}" y="${m.top}" width="${A.iw}" height="${ih}"/>`;
     charts[key] = { y, ys };
     return `<svg class="chart" data-key="${key}" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${out}</svg>`;
   }
@@ -713,6 +718,7 @@ window.GPXDetail = (() => {
 
   // ---------- Hover ----------
   function setHover(i, ev) {
+    clearTimeout(mapLeaveTimer);
     const p = cur?.p;
     if (!p || i == null) return;
     const A = xAxis;
@@ -759,18 +765,33 @@ window.GPXDetail = (() => {
     hideTip();
   }
 
+  // The side of the cursor the tooltip sits on depends only on which half of
+  // the window the cursor is in – not on the tooltip's width, which changes
+  // with its content and would make it jump from side to side.
+  let tipHtml = null;
   function showTip(html, x, y) {
     const el = $("detail-tip");
-    el.innerHTML = html;
+    if (html !== tipHtml) { el.innerHTML = html; tipHtml = html; }
     el.hidden = false;
     const r = el.getBoundingClientRect();
-    let left = x + 14, top = y + 14;
-    if (left + r.width > window.innerWidth - 8) left = x - r.width - 14;
-    if (top + r.height > window.innerHeight - 8) top = y - r.height - 14;
-    el.style.left = Math.max(8, left) + "px";
-    el.style.top = Math.max(8, top) + "px";
+    const left = x > window.innerWidth / 2 ? x - r.width - 16 : x + 16;
+    const top = y > window.innerHeight / 2 ? y - r.height - 16 : y + 16;
+    el.style.left = Math.max(8, Math.min(window.innerWidth - r.width - 8, left)) + "px";
+    el.style.top = Math.max(8, Math.min(window.innerHeight - r.height - 8, top)) + "px";
   }
   function hideTip() { $("detail-tip").hidden = true; }
+
+  // pointer events can fire far more often than the screen refreshes;
+  // handle only the latest one per frame
+  let pendingPointer = null;
+  function onPointerEvent(e) {
+    if (!pendingPointer) requestAnimationFrame(() => {
+      const ev = pendingPointer;
+      pendingPointer = null;
+      if (ev && cur) onPointer(ev); // null after the pointer left the panel
+    });
+    pendingPointer = e;
+  }
 
   function onPointer(e) {
     const hit = e.target.closest?.(".hit-line");
@@ -911,9 +932,9 @@ window.GPXDetail = (() => {
   function init(opts) {
     ctx = opts;
     const body = $("detail-body");
-    body.addEventListener("pointermove", onPointer);
-    body.addEventListener("pointerdown", onPointer);
-    body.addEventListener("pointerleave", () => { clearHover(); hideSplitOnMap(); });
+    body.addEventListener("pointermove", onPointerEvent);
+    body.addEventListener("pointerdown", onPointerEvent);
+    body.addEventListener("pointerleave", () => { pendingPointer = null; clearHover(); hideSplitOnMap(); });
     body.addEventListener("scroll", hideTip, { passive: true });
     body.addEventListener("click", onClick);
     $("detail-close").addEventListener("click", close);
