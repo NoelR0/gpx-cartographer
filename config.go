@@ -28,6 +28,11 @@ type Config struct {
 	TileAttribution string
 	TileMaxZoom     int
 
+	// Elevation tiles for the relief beneath the explorer fog; empty turns it off
+	TerrainURL         string
+	TerrainAttribution string
+	TerrainMaxZoom     int
+
 	Explorer bool // start with the explorer fog on
 
 	// Command line only
@@ -100,6 +105,13 @@ func loadConfig(args []string) (*Config, error) {
 		TileAttribution: envStr("TILE_ATTRIBUTION", `&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors`),
 		TileMaxZoom:     envInt("TILE_MAX_ZOOM", 19),
 		Explorer:        envBool("EXPLORER", true),
+
+		TerrainURL:         envStr("TERRAIN_URL", "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp"),
+		TerrainAttribution: envStr("TERRAIN_ATTRIBUTION", `<a href="https://mapterhorn.com/attribution">&copy; Mapterhorn</a>`),
+		TerrainMaxZoom:     envInt("TERRAIN_MAX_ZOOM", 18),
+	}
+	if !envBool("TERRAIN", true) {
+		c.TerrainURL = ""
 	}
 	tzName := envStr("CAMERA_TZ", envStr("TZ", "Europe/Zurich"))
 

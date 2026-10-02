@@ -245,11 +245,14 @@ func sortTracks(ts []trackJSON) {
 
 func (s *server) handleConfig(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, r, map[string]any{
-		"version":          version,
-		"tile_url":         s.cfg.TileURL,
-		"tile_attribution": s.cfg.TileAttribution,
-		"tile_max_zoom":    s.cfg.TileMaxZoom,
-		"explorer":         s.cfg.Explorer,
+		"version":             version,
+		"tile_url":            s.cfg.TileURL,
+		"tile_attribution":    s.cfg.TileAttribution,
+		"tile_max_zoom":       s.cfg.TileMaxZoom,
+		"terrain_url":         s.cfg.TerrainURL,
+		"terrain_attribution": s.cfg.TerrainAttribution,
+		"terrain_max_zoom":    s.cfg.TerrainMaxZoom,
+		"explorer":            s.cfg.Explorer,
 	})
 }
 

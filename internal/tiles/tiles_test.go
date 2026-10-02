@@ -70,3 +70,38 @@ func TestArea(t *testing.T) {
 		t.Errorf("sum %.0f, want %.0f", sum, want)
 	}
 }
+
+func TestFillEnclosed(t *testing.T) {
+	// a ring around a 3×3 hole, a ring around a 4×4 hole, and a ring with a
+	// gap at one side
+	ring := func(m map[Tile]struct{}, x0, y0, w, gap int) {
+		for x := x0; x < x0+w; x++ {
+			for y := y0; y < y0+w; y++ {
+				edge := x == x0 || y == y0 || x == x0+w-1 || y == y0+w-1
+				if edge && !(gap > 0 && x == x0 && y == y0+gap) {
+					m[Tile{uint32(x), uint32(y)}] = struct{}{}
+				}
+			}
+		}
+	}
+	d := map[Tile]struct{}{}
+	ring(d, 100, 100, 5, 0)
+	ring(d, 200, 100, 6, 0)
+	ring(d, 300, 100, 5, 2)
+	before := len(d)
+	if got := FillEnclosed(d, 14, 10); got != 9 {
+		t.Fatalf("filled %d tiles, want 9", got)
+	}
+	if len(d) != before+9 {
+		t.Fatalf("got %d tiles, want %d", len(d), before+9)
+	}
+	if _, ok := d[Tile{102, 102}]; !ok {
+		t.Error("small hole not filled")
+	}
+	if _, ok := d[Tile{202, 102}]; ok {
+		t.Error("hole larger than max filled")
+	}
+	if _, ok := d[Tile{302, 102}]; ok {
+		t.Error("open area filled")
+	}
+}

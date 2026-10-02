@@ -87,10 +87,19 @@
     try {
       const cfg = await fetch("api/config").then((r) => r.json());
       // the replay shows the fog alone
-      GPXTiles.init({ map, enabled: cfg.explorer, onReplay: (on) => setBaseLayers(!on) });
+      GPXTiles.init({
+        map, enabled: cfg.explorer, onReplay: (on) => setBaseLayers(!on),
+        terrain: { url: cfg.terrain_url, attribution: cfg.terrain_attribution, maxZoom: cfg.terrain_max_zoom },
+      });
       $("version").textContent = `GPX Cartographer ${cfg.version}`;
       map.setMaxZoom(cfg.tile_max_zoom);
       L.tileLayer(cfg.tile_url, { maxZoom: cfg.tile_max_zoom, attribution: cfg.tile_attribution, noWrap: true, bounds: WORLD }).addTo(map);
+      if (GPXTerrain.enabled()) {
+        const pane = map.createPane("relief");
+        pane.style.zIndex = 250; // on the base map, below the explorer fog
+        pane.style.pointerEvents = "none";
+        GPXTerrain.layer("relief").addTo(map);
+      }
     } catch (err) {
       $("status").innerHTML = `<span class="warn">Could not load configuration: ${esc(err.message)}</span>`;
       GPXTiles.init({ map, enabled: false });

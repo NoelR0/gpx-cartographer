@@ -114,6 +114,10 @@ available as the flags `-photos`, `-gpx`, `-addr`, `-tz` and `-explorer`, e.g. `
 | `TILE_ATTRIBUTION` | OSM | Attribution shown for the tiles |
 | `TILE_MAX_ZOOM` | `19` | Maximum zoom level |
 | `EXPLORER` | `true` | Start in [explorer mode](#explorer-mode); `false` starts with the normal map |
+| `TERRAIN` | `true` | Show the relief of the terrain on the map and the undiscovered area; `false` turns it off |
+| `TERRAIN_URL` | Mapterhorn | Terrarium-encoded elevation tiles for the relief (see below) |
+| `TERRAIN_ATTRIBUTION` | Mapterhorn | Attribution shown for the elevation tiles |
+| `TERRAIN_MAX_ZOOM` | `18` | Highest zoom level loaded from `TERRAIN_URL`; where a tile is missing, the next coarser one is enlarged |
 | `GOMEMLIMIT` | `64MiB` in the image | Soft memory limit of the Go runtime |
 
 ### Map tiles
@@ -123,15 +127,32 @@ the OpenStreetMap Foundation's [Tile Usage Policy](https://operations.osmfoundat
 prohibits heavy use. If you run the application for many users, set `TILE_URL` to a different
 provider or your own tile server and adjust `TILE_ATTRIBUTION` accordingly.
 
+The map is overlaid with the relief of the terrain; in explorer mode, the undiscovered area
+shows only the relief, without towns or roads. It is shaded in the browser from the elevation
+tiles of [Mapterhorn](https://mapterhorn.com), an open-data project that needs no API key.
+Zoom 12 (about 30 m) is available worldwide, finer levels down to 0.25–1 m in many countries with
+detailed elevation models, e.g. Switzerland, Germany and Austria; the undiscovered area uses
+zoom 12 only. Like the map tiles, they are loaded by the browser directly from the tile
+server, which sees the visitor's IP address and the area being viewed, but nothing is stored on
+the server. `TERRAIN=false` turns the relief off; the base map then shows faintly through the
+undiscovered area instead.
+
+The relief needs one elevation tile per 2 × 2 map tiles (about 60–170 KB each, cached by the
+browser for a week). The browser keeps the shaded relief of the last 64 of them in memory, about
+1 MB each.
+
 ## Explorer mode
 
 Explorer mode turns your tracks into a map you uncover, like the fog of war in a game:
 
-- The whole map starts out **black**.
+- The whole map starts out covered in **parchment** that shows only the relief of the terrain.
 - The world is divided into the map tiles of **zoom level 14** (about 2.4 × 2.4 km at the
   equator, ~1.7 × 1.7 km in Central Europe).
 - Every tile one of your tracks passes through is uncovered **together with its eight
   neighbours**, so a single ride reveals a strip about three tiles wide.
+- Undiscovered patches of up to **100 tiles** that are completely surrounded by discovered
+  tiles are discovered as well. They count for the track that closed the ring and are shown
+  **hatched** when that track's new tiles are highlighted (e.g. after clicking the track).
 - Tracks and photos stay visible on top of the black area. Once zoomed in far enough, a thin
   grid shows the tile borders.
 - Only tracks **with timestamps** count; planned routes without times do not uncover anything.
@@ -173,7 +194,7 @@ decides how the map starts.
 - **CPU:** the discovered area is computed once per set of tracks and cached; it is only
   recomputed when GPX files are added, changed or removed.
 - **Browser:** the discovered tiles are computed and drawn in the browser from the track data
-  that is loaded anyway; no extra requests to the tile server are made.
+  that is loaded anyway.
 - **Binary size:** the embedded region data (Natural Earth, public domain) adds ~3 MB.
 
 ## Memory usage

@@ -16,6 +16,10 @@ import (
 // explorerZoom is the zoom level of the explorer tiles (as in web/tiles.js).
 const explorerZoom = 14
 
+// maxEnclosed is the largest undiscovered area, in tiles, that is discovered
+// once surrounded by discovered tiles (as in web/tiles.js).
+const maxEnclosed = 100
+
 // coverageCache keeps how much area of every state has been discovered. It is
 // recomputed only when the set of tracks changes.
 type coverageCache struct {
@@ -40,8 +44,8 @@ func (c *coverageCache) get(db *regions.DB, tracks []*gpx.Track) *coverage {
 	return c.entry
 }
 
-// computeCoverage assigns every discovered tile (visited tiles and their
-// neighbours) to the state its center lies in and adds up the tile areas.
+// computeCoverage assigns every discovered tile (visited tiles, their
+// neighbours and small enclosed areas) to the state its center lies in and adds up the tile areas.
 // Tiles at sea are not counted.
 func computeCoverage(db *regions.DB, tracks []*gpx.Track, z int) *coverage {
 	var segs [][]int32
@@ -54,7 +58,9 @@ func computeCoverage(db *regions.DB, tracks []*gpx.Track, z int) *coverage {
 		countries:  make([]float64, len(db.Countries)),
 		continents: make([]float64, len(db.Continents)),
 	}
-	for t := range tiles.Discovered(tiles.Visited(segs, z), z) {
+	discovered := tiles.Discovered(tiles.Visited(segs, z), z)
+	tiles.FillEnclosed(discovered, z, maxEnclosed)
+	for t := range discovered {
 		lat, lon := t.Center(z)
 		if i := db.Lookup(lat, lon); i >= 0 {
 			a := t.AreaKm2(z)

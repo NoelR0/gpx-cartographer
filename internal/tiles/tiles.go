@@ -1,5 +1,6 @@
 // Package tiles computes the slippy-map tiles (Web Mercator) that tracks pass
-// through and the tiles discovered by them. It mirrors the computation in
+// through and the tiles discovered by them, including small areas enclosed
+// by discovered tiles. It mirrors the computation in
 // web/tiles.js.
 package tiles
 
@@ -55,6 +56,73 @@ func Discovered(visited map[Tile]struct{}, z int) map[Tile]struct{} {
 		}
 	}
 	return out
+}
+
+// FillEnclosed adds every undiscovered area of at most max tiles that is
+// completely surrounded by discovered tiles (4-connected, so a gap at a
+// corner does not let an area escape) to discovered and returns the number
+// of tiles added. Areas reaching a pole are not enclosed.
+func FillEnclosed(discovered map[Tile]struct{}, z, max int) int {
+	n := int(uint32(1) << z)
+	seen := map[Tile]int{} // tile -> the fill that reached it
+	var area []Tile
+	// collects the area around start into area; false once it grows beyond
+	// max, reaches a pole or runs into an area that did so before
+	fill := func(start Tile, id int) bool {
+		area = append(area[:0], start)
+		seen[start] = id
+		for i := 0; i < len(area); i++ {
+			x, y := int(area[i].X), int(area[i].Y)
+			for _, d := range [4][2]int{{1, 0}, {-1, 0}, {0, 1}, {0, -1}} {
+				ny := y + d[1]
+				if ny < 0 || ny >= n {
+					return false
+				}
+				t := Tile{uint32((x + d[0] + n) % n), uint32(ny)}
+				if _, ok := discovered[t]; ok {
+					continue
+				}
+				if prev, ok := seen[t]; ok {
+					if prev != id {
+						return false
+					}
+					continue
+				}
+				if len(area) >= max {
+					return false
+				}
+				seen[t] = id
+				area = append(area, t)
+			}
+		}
+		return true
+	}
+	var starts []Tile
+	for t := range discovered {
+		for _, d := range [4][2]int{{1, 0}, {-1, 0}, {0, 1}, {0, -1}} {
+			ny := int(t.Y) + d[1]
+			if ny < 0 || ny >= n {
+				continue
+			}
+			nt := Tile{uint32((int(t.X) + d[0] + n) % n), uint32(ny)}
+			if _, ok := discovered[nt]; !ok {
+				starts = append(starts, nt)
+			}
+		}
+	}
+	added := 0
+	for i, s := range starts {
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		if fill(s, i) {
+			for _, t := range area {
+				discovered[t] = struct{}{}
+			}
+			added += len(area)
+		}
+	}
+	return added
 }
 
 // line walks the tiles crossed by the line a–b (Amanatides & Woo).

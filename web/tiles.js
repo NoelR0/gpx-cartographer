@@ -5,9 +5,14 @@
 // Every tile is credited to the oldest track that uncovered it. Tiles first
 // uncovered in the last RECENT_DAYS glow, as do the new tiles of the track
 // open in the detail view. Nothing is stored: all of it follows from the
-// track dates. The replay shows the tiles uncovered up to a moving date,
+// track dates. Small undiscovered areas (up to MAX_ENCLOSED tiles) that
+// become completely surrounded by discovered tiles are discovered as well,
+// credited to the track that closed them, and drawn hatched when highlighted.
+// The replay shows the tiles uncovered up to a moving date,
 // with the tracks whose tiles are glowing drawn as bright beams. Uncovered
-// areas get soft, singed edges and fade in when they are new.
+// areas get soft, singed edges, lie in the shadow of the parchment and fade
+// in when they are new. The parchment shows the relief of the terrain (see
+// terrain.js), or else the base map faintly.
 window.GPXTiles = (() => {
   "use strict";
 
@@ -16,14 +21,20 @@ window.GPXTiles = (() => {
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const ZOOM = 14;
   const N = 2 ** ZOOM;
-  const GRID_MIN_PX = 12; // draw grid lines once a tile is at least this large on screen
+  const GRID_MIN_PX = 8;   // grid lines fade in once a tile is at least this large on screen
+  const GRID_FULL_PX = 24; // and are fully visible from this size on
   const GRID = "rgba(95, 62, 25, .3)";
+  const FOG_ALPHA = 0.88; // the base map shows faintly through the parchment, unless there is a relief
+  const SHADOW = "rgba(60, 34, 8, .5)"; // cast by the parchment into the uncovered areas
   const SOFT_MIN_PX = 6;  // soft edges once a tile is at least this large on screen
   const SOFT_MAX_PX = 14; // blur radius of the edges at most
   const SINGE = "rgba(92, 52, 14, .55)"; // darkened parchment around uncovered areas
   const REVEAL_S = 1.2;   // new tiles fade in this long after loading
   const REPLAY_REVEAL_S = 0.4; // and this long during the replay
   const GLOW = "rgba(255, 190, 40, .7)";
+  const HATCH = "rgba(255, 170, 20, .95)";     // stripes over enclosed tiles
+  const HATCH_BASE = "rgba(255, 190, 40, .25)"; // and the fill beneath them
+  const MAX_ENCLOSED = 100; // as maxEnclosed in coverage.go
   const RECENT_DAYS = 7;
   const DAY_MS = 86400000;
   // replay speeds in days per second
@@ -38,6 +49,7 @@ window.GPXTiles = (() => {
   let tracks = [];        // timed tracks, oldest first
   let discovered = null;  // Map of x * N + y -> index of the first track that uncovered it, computed lazily
   let newCounts = null;   // track id -> number of tiles it uncovered first
+  let enclosed = null;    // Set of the tiles discovered by being surrounded
   let layer = null;       // canvas fog layer
   let glowLayer = null;   // canvas layer with the highlighted tiles
   let glow = null;        // Set of highlighted tiles, computed lazily
@@ -51,6 +63,8 @@ window.GPXTiles = (() => {
   let starts = [];        // start time of every track in ms
   let reveal = null;      // fade-in of the recent tiles after loading, {from, t0, raf}
   let fogPattern = null;
+  let stainPattern = null;
+  let hatchPattern = null;
   const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)");
 
   const store = {
@@ -88,9 +102,35 @@ window.GPXTiles = (() => {
       }
     };
 
+    // Collects the undiscovered area 4-connected to tile k (a gap at a corner
+    // does not let it escape); null once it grows beyond MAX_ENCLOSED, reaches
+    // a pole or runs into an area that did so before. seen maps the tiles
+    // reached to the fill that reached them.
+    const area = (out, k, seen) => {
+      const tiles = [k];
+      seen.set(k, k);
+      for (let j = 0; j < tiles.length; j++) {
+        const x = Math.floor(tiles[j] / N), y = tiles[j] % N;
+        for (const [nx, ny] of [[(x + 1) % N, y], [(x - 1 + N) % N, y], [x, y + 1], [x, y - 1]]) {
+          if (ny < 0 || ny >= N) return null;
+          const nk = key(nx, ny);
+          if (out.has(nk)) continue;
+          if (seen.has(nk)) {
+            if (seen.get(nk) !== k) return null;
+            continue;
+          }
+          if (tiles.length >= MAX_ENCLOSED) return null;
+          seen.set(nk, k);
+          tiles.push(nk);
+        }
+      }
+      return tiles;
+    };
+
     // tracks are sorted by start, so the first track to reach a tile keeps it
     const out = new Map();
     newCounts = new Map();
+    enclosed = new Set();
     tracks.forEach((t, i) => {
       visited = new Set();
       for (const seg of t.segments) {
@@ -104,7 +144,7 @@ window.GPXTiles = (() => {
       }
       // every visited tile uncovers its eight neighbours as well; x wraps
       // around the antimeridian
-      let fresh = 0;
+      const fresh = [];
       for (const k of visited) {
         const x = Math.floor(k / N), y = k % N;
         for (let dy = -1; dy <= 1; dy++) {
@@ -112,11 +152,26 @@ window.GPXTiles = (() => {
           if (ny < 0 || ny >= N) continue;
           for (let dx = -1; dx <= 1; dx++) {
             const nk = key((x + dx + N) % N, ny);
-            if (!out.has(nk)) { out.set(nk, i); fresh++; }
+            if (!out.has(nk)) { out.set(nk, i); fresh.push(nk); }
           }
         }
       }
-      newCounts.set(t.id, fresh);
+      // only areas next to the new tiles can have become enclosed
+      let count = fresh.length;
+      const seen = new Map();
+      for (const k of fresh) {
+        const x = Math.floor(k / N), y = k % N;
+        for (const [nx, ny] of [[(x + 1) % N, y], [(x - 1 + N) % N, y], [x, y + 1], [x, y - 1]]) {
+          if (ny < 0 || ny >= N) continue;
+          const nk = key(nx, ny);
+          if (out.has(nk) || seen.has(nk)) continue;
+          const tiles = area(out, nk, seen);
+          if (!tiles) continue;
+          for (const ak of tiles) { out.set(ak, i); enclosed.add(ak); }
+          count += tiles.length;
+        }
+      }
+      newCounts.set(t.id, count);
     });
     return out;
   }
@@ -189,14 +244,41 @@ window.GPXTiles = (() => {
     const rect = (x, y) => {
       // keep single tiles visible as one pixel when zoomed out
       if (cell < 1) return [Math.floor((x - ox) * cell), Math.floor((y - oy) * cell), 1, 1];
-      // rounded edges, so that neighbouring tiles leave no seams
-      const px = Math.round((x - ox) * cell), py = Math.round((y - oy) * cell);
-      return [px, py, Math.round((x + 1 - ox) * cell) - px, Math.round((y + 1 - oy) * cell) - py];
+      // rounded edges, so that neighbouring tiles leave no seams; clamped to
+      // one map tile around this one, since softFill moves the shapes only
+      // that far off the canvas (explorer tiles get larger than map tiles
+      // from zoom 15 on)
+      const clamp = (v) => Math.max(-size, Math.min(2 * size, Math.round(v)));
+      const px = clamp((x - ox) * cell), py = clamp((y - oy) * cell);
+      return [px, py, clamp((x + 1 - ox) * cell) - px, clamp((y + 1 - oy) * cell) - py];
     };
     return {
       cell, ox, oy, rect,
       x0: Math.floor(ox), y0: Math.floor(oy),
       x1: Math.ceil(ox + scale) - 1, y1: Math.ceil(oy + scale) - 1,
+    };
+  }
+
+  // deterministic pseudo random numbers, so every load looks the same
+  const random = (seed) => () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+
+  // Tileable value noise on an S x S square: octaves gives the cells per side
+  // and the amplitude of each octave (the amplitudes sum up to 1).
+  function valueNoise(S, octaves, rnd) {
+    const os = octaves.map(([n, amp]) => ({ n, amp, v: Array.from({ length: n * n }, rnd) }));
+    const smooth = (t) => t * t * (3 - 2 * t);
+    return (px, py) => {
+      let v = 0;
+      for (const o of os) {
+        const fx = (px / S) * o.n, fy = (py / S) * o.n;
+        const ix = Math.floor(fx), iy = Math.floor(fy);
+        const tx = smooth(fx - ix), ty = smooth(fy - iy);
+        const at = (x, y) => o.v[(y % o.n) * o.n + (x % o.n)]; // wraps: the texture tiles
+        const a = at(ix, iy) + (at(ix + 1, iy) - at(ix, iy)) * tx;
+        const b = at(ix, iy + 1) + (at(ix + 1, iy + 1) - at(ix, iy + 1)) * tx;
+        v += (a + (b - a) * ty) * o.amp;
+      }
+      return v;
     };
   }
 
@@ -208,24 +290,11 @@ window.GPXTiles = (() => {
     c.width = c.height = S;
     const g = c.getContext("2d");
     const img = g.createImageData(S, S);
-    // deterministic pseudo random numbers, so every load looks the same
-    let seed = 7;
-    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-    const octaves = [4, 8, 16, 48].map((n, i) => ({ n, amp: [0.45, 0.3, 0.17, 0.08][i], v: Array.from({ length: n * n }, rnd) }));
-    const smooth = (t) => t * t * (3 - 2 * t);
+    const rnd = random(7);
+    const noise = valueNoise(S, [[4, 0.45], [8, 0.3], [16, 0.17], [48, 0.08]], rnd);
     for (let py = 0; py < S; py++) {
       for (let px = 0; px < S; px++) {
-        let v = 0;
-        for (const o of octaves) {
-          const fx = (px / S) * o.n, fy = (py / S) * o.n;
-          const ix = Math.floor(fx), iy = Math.floor(fy);
-          const tx = smooth(fx - ix), ty = smooth(fy - iy);
-          const at = (x, y) => o.v[(y % o.n) * o.n + (x % o.n)]; // wraps: the texture tiles
-          const a = at(ix, iy) + (at(ix + 1, iy) - at(ix, iy)) * tx;
-          const b = at(ix, iy + 1) + (at(ix + 1, iy + 1) - at(ix, iy + 1)) * tx;
-          v += (a + (b - a) * ty) * o.amp;
-        }
-        const shade = (v - 0.5) * 46 + (rnd() - 0.5) * 10;
+        const shade = (noise(px, py) - 0.5) * 46 + (rnd() - 0.5) * 10;
         const i = (py * S + px) * 4;
         img.data[i] = 206 + shade;
         img.data[i + 1] = 182 + shade * 0.95;
@@ -235,6 +304,64 @@ window.GPXTiles = (() => {
     }
     g.putImageData(img, 0, 0);
     return ctx.createPattern(c, "repeat");
+  }
+
+  // Transparent stains with darker rims and paper fibers, three map tiles per
+  // side: laid over the parchment, whose period is two, the texture repeats
+  // only every six map tiles.
+  function makeStainPattern(ctx, size) {
+    const S = size * 3;
+    const c = document.createElement("canvas");
+    c.width = c.height = S;
+    const g = c.getContext("2d");
+    const img = g.createImageData(S, S);
+    const rnd = random(13);
+    const noise = valueNoise(S, [[3, 0.4], [6, 0.3], [12, 0.18], [36, 0.12]], rnd);
+    const T = 0.6; // noise level above which the paper is stained
+    for (let py = 0; py < S; py++) {
+      for (let px = 0; px < S; px++) {
+        const d = noise(px, py) - T;
+        const stain = Math.max(0, Math.min(1, d * 5)) * 0.16;
+        const rim = Math.exp(-((d / 0.012) ** 2)) * 0.14; // dried edge of the stain
+        const i = (py * S + px) * 4;
+        img.data[i] = 120;
+        img.data[i + 1] = 78;
+        img.data[i + 2] = 30;
+        img.data[i + 3] = Math.round((stain + rim) * 255);
+      }
+    }
+    g.putImageData(img, 0, 0);
+    // fibers: short curved strokes, dark and light, drawn wrapped around the edges
+    g.lineWidth = 0.7;
+    g.lineCap = "round";
+    const fibers = Math.round((S * S) / 3000);
+    for (let n = 0; n < fibers; n++) {
+      const x = rnd() * S, y = rnd() * S;
+      const a = rnd() * Math.PI * 2, len = 8 + rnd() * 30, bend = (rnd() - 0.5) * len * 0.6;
+      const ex = x + Math.cos(a) * len, ey = y + Math.sin(a) * len;
+      const cx = (x + ex) / 2 - Math.sin(a) * bend, cy = (y + ey) / 2 + Math.cos(a) * bend;
+      g.strokeStyle = rnd() < 0.6 ? "rgba(105, 70, 30, .14)" : "rgba(255, 246, 222, .22)";
+      g.beginPath();
+      for (const ox of [-S, 0, S]) {
+        for (const oy of [-S, 0, S]) {
+          g.moveTo(x + ox, y + oy);
+          g.quadraticCurveTo(cx + ox, cy + oy, ex + ox, ey + oy);
+        }
+      }
+      g.stroke();
+    }
+    return ctx.createPattern(c, "repeat");
+  }
+
+  // fills a map tile with a pattern of period map tiles per side, aligned
+  // with the neighbouring tiles
+  function fillPattern(ctx, pattern, period, size, coords) {
+    const ox = (coords.x % period) * size, oy = (coords.y % period) * size;
+    ctx.save();
+    ctx.translate(-ox, -oy);
+    ctx.fillStyle = pattern;
+    ctx.fillRect(ox, oy, size, size);
+    ctx.restore();
   }
 
   // how far the tiles of track i are uncovered, 0..1
@@ -252,30 +379,33 @@ window.GPXTiles = (() => {
   // fills a path with blurred edges: the shape itself is drawn far off the
   // canvas and only its shadow lands on it (works in every browser, unlike
   // ctx.filter). One fill per path, so overlapping tiles leave no seams.
-  function softFill(ctx, path, color, blur, size) {
+  // The edges can be moved by dx, dy and the path filled with another rule.
+  function softFill(ctx, path, color, blur, size, dx = 0, dy = 0, rule = "nonzero") {
     if (!blur) {
       ctx.fillStyle = color;
-      ctx.fill(path);
+      ctx.fill(path, rule);
       return;
     }
     const off = size * 3;
     ctx.save();
     ctx.translate(-off, 0);
-    ctx.shadowOffsetX = off;
+    ctx.shadowOffsetX = off + dx;
+    ctx.shadowOffsetY = dy;
     ctx.shadowBlur = blur;
     ctx.shadowColor = color;
     ctx.fillStyle = "#000";
-    ctx.fill(path);
+    ctx.fill(path, rule);
     ctx.restore();
   }
 
   // the tiles of a Set or Map around a map tile as paths, grouped by how far
-  // they are uncovered (progress gets the track index of a Map entry); tiles a little beyond the edges are included, so that the
+  // they are uncovered (progress gets the track index of a Map entry and the
+  // tile key); tiles a little beyond the edges are included, so that the
   // blur matches across neighbouring map tiles
   function uncoveredPaths(tiles, g, margin, progress) {
     const paths = new Map(); // progress (in steps of 0.1) -> Path2D
     eachIn(tiles, g.x0 - margin, g.y0 - margin, g.x1 + margin, g.y1 + margin, (x, y, k) => {
-      const p = Math.round(progress(tiles instanceof Map ? tiles.get(k) : -1) * 10) / 10;
+      const p = Math.round(progress(tiles instanceof Map ? tiles.get(k) : -1, k) * 10) / 10;
       if (p <= 0) return;
       if (!paths.has(p)) paths.set(p, new Path2D());
       paths.get(p).rect(...g.rect(x, y));
@@ -292,36 +422,21 @@ window.GPXTiles = (() => {
     const g = tileGeometry(size, coords);
     const blur = blurOf(g.cell);
 
-    // parchment, aligned with the neighbouring tiles
+    // parchment with stains, aligned with the neighbouring tiles; the canvas
+    // is repainted in place, so it is cleared first
     if (!fogPattern) fogPattern = makeFogPattern(ctx, size);
+    if (!stainPattern) stainPattern = makeStainPattern(ctx, size);
     ctx.globalCompositeOperation = "source-over";
     ctx.globalAlpha = 1;
-    ctx.save();
-    ctx.translate(-(coords.x % 2) * size, -(coords.y % 2) * size);
-    ctx.fillStyle = fogPattern;
-    ctx.fillRect((coords.x % 2) * size, (coords.y % 2) * size, size, size);
-    ctx.restore();
+    ctx.clearRect(0, 0, size, canvas.height);
+    fillPattern(ctx, fogPattern, 2, size, coords);
+    fillPattern(ctx, stainPattern, 3, size, coords);
+    GPXTerrain.draw(canvas, coords, () => drawTile(canvas, coords));
 
-    const paths = uncoveredPaths(tiles, g, blur ? Math.ceil((blur * 2) / g.cell) + 1 : 0, revealed);
-    if (blur) {
-      // singe the parchment around the openings
-      ctx.globalCompositeOperation = "source-atop";
-      for (const [p, path] of paths) {
-        ctx.globalAlpha = p;
-        softFill(ctx, path, SINGE, blur * 2.5, size);
-      }
-    }
-    // cut the openings
-    ctx.globalCompositeOperation = "destination-out";
-    for (const [p, path] of paths) {
-      ctx.globalAlpha = p;
-      softFill(ctx, path, "#000", blur, size);
-    }
-    ctx.globalCompositeOperation = "source-over";
-    ctx.globalAlpha = 1;
-
+    // the grid is drawn on the parchment only and fades in with the zoom
     const { cell, ox, oy, x0, y0, x1, y1 } = g;
     if (cell >= GRID_MIN_PX) {
+      ctx.globalAlpha = Math.min(1, (cell - GRID_MIN_PX) / (GRID_FULL_PX - GRID_MIN_PX));
       ctx.strokeStyle = GRID;
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -335,15 +450,81 @@ window.GPXTiles = (() => {
       }
       ctx.stroke();
     }
+
+    const paths = uncoveredPaths(tiles, g, blur ? Math.ceil((blur * 2) / g.cell) + 1 : 0, revealed);
+    if (blur) {
+      // singe the parchment around the openings
+      ctx.globalCompositeOperation = "source-atop";
+      for (const [p, path] of paths) {
+        ctx.globalAlpha = p;
+        softFill(ctx, path, SINGE, blur * 2.5, size);
+      }
+    }
+    // without a relief, let the base map show through faintly
+    if (!GPXTerrain.enabled()) {
+      ctx.globalCompositeOperation = "destination-in";
+      ctx.globalAlpha = FOG_ALPHA;
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, size, canvas.height);
+    }
+    // cut the openings
+    ctx.globalCompositeOperation = "destination-out";
+    for (const [p, path] of paths) {
+      ctx.globalAlpha = p;
+      softFill(ctx, path, "#000", blur, size);
+    }
+    // the parchment lies above the map and casts a shadow to the lower right
+    // into the openings: the shadow of everything but the openings, drawn
+    // beneath the parchment
+    if (blur && paths.size) {
+      const outside = new Path2D();
+      outside.rect(-size, -size, size * 3, size * 3);
+      for (const path of paths.values()) outside.addPath(path);
+      ctx.globalCompositeOperation = "destination-over";
+      ctx.globalAlpha = 1;
+      softFill(ctx, outside, SHADOW, blur * 1.2, size, blur * 0.5, blur * 0.5, "evenodd");
+    }
+    ctx.globalCompositeOperation = "source-over";
+    ctx.globalAlpha = 1;
+  }
+
+  // diagonal stripes; the period divides the tile size, so they run on
+  // seamlessly across map tiles
+  function makeHatchPattern(ctx) {
+    const P = 8;
+    const c = document.createElement("canvas");
+    c.width = c.height = P;
+    const g = c.getContext("2d");
+    g.strokeStyle = HATCH;
+    g.lineWidth = 2;
+    g.beginPath();
+    for (const o of [-P, 0, P]) { g.moveTo(o, P); g.lineTo(o + P, 0); }
+    g.stroke();
+    return ctx.createPattern(c, "repeat");
   }
 
   function drawGlowTile(canvas, coords) {
+    const size = canvas.width;
     const ctx = canvas.getContext("2d");
-    const g = tileGeometry(canvas.width, coords);
+    const g = tileGeometry(size, coords);
     const blur = blurOf(g.cell);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const paths = uncoveredPaths(highlighted(), g, blur ? Math.ceil((blur * 2) / g.cell) + 1 : 0, () => 1);
-    for (const path of paths.values()) softFill(ctx, path, GLOW, blur, canvas.width);
+    const margin = blur ? Math.ceil((blur * 2) / g.cell) + 1 : 0;
+    ctx.clearRect(0, 0, size, canvas.height);
+    // enclosed tiles are hatched once the stripes fit into a tile
+    const hatch = g.cell >= SOFT_MIN_PX;
+    const tiles = highlighted();
+    const plain = uncoveredPaths(tiles, g, margin, (_, k) => (hatch && enclosed.has(k) ? 0 : 1));
+    for (const path of plain.values()) softFill(ctx, path, GLOW, blur, size);
+    if (!hatch) return;
+    if (!hatchPattern) hatchPattern = makeHatchPattern(ctx);
+    for (const path of uncoveredPaths(tiles, g, margin, (_, k) => (enclosed.has(k) ? 1 : 0)).values()) {
+      softFill(ctx, path, HATCH_BASE, blur, size);
+      ctx.save();
+      ctx.clip(path);
+      ctx.fillStyle = hatchPattern;
+      ctx.fillRect(0, 0, size, canvas.height);
+      ctx.restore();
+    }
   }
 
   // fades in the recently uncovered tiles
@@ -637,6 +818,7 @@ window.GPXTiles = (() => {
 
   function init(opts) {
     map = opts.map;
+    GPXTerrain.configure(opts.terrain);
     const pane = map.createPane("explorer");
     pane.style.zIndex = 350; // above the base map, below tracks and photos
     pane.style.pointerEvents = "none";
@@ -699,6 +881,7 @@ window.GPXTiles = (() => {
     starts = tracks.map((t) => Date.parse(t.start));
     discovered = null;
     newCounts = null;
+    enclosed = null;
     glow = null;
     refresh();
   }
